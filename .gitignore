@@ -1,0 +1,25 @@
+# secrets
+.env
+
+# run logs, recordings, training data
+data/*
+!data/.gitkeep
+results.csv
+frame_test.jpg
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# test photos may show teammates' faces: kept local by default
+test_photos/*.jpg
+test_photos/*.jpeg
+test_photos/*.png

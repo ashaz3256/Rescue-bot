@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rescue Scout Dashboard</title>
+<style>
+:root {
+  --bg: #0e1214; --panel: #161c1f; --ink: #e3e8e9; --muted: #8f9ba0; --line: #2a3438;
+  --accent: #f06d36; --trail: #63a2e6; --target: #f06060; --good: #5cc28b;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: baseline; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+header h1 { margin: 0; font-size: 22px; letter-spacing: .02em; }
+#run { font: 12px var(--mono); color: var(--muted); }
+#status { font: 13px var(--mono); color: var(--accent); }
+main { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; padding: 16px 20px; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.card h2 { margin: 0; padding: 10px 14px; font-size: 13px; font-family: var(--mono); color: var(--muted); letter-spacing: .06em; text-transform: uppercase; border-bottom: 1px solid var(--line); }
+#frame { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #000; }
+#now { padding: 12px 14px; display: grid; gap: 4px; }
+#now .obs { font-size: 17px; }
+#now .act { font: 14px var(--mono); color: var(--accent); }
+#plan { padding: 12px 14px; color: var(--trail); }
+canvas { display: block; width: 100%; height: 300px; }
+.right { display: grid; gap: 16px; align-content: start; }
+#log { list-style: none; margin: 0; padding: 0; max-height: 360px; overflow-y: auto; }
+#log li { padding: 8px 14px; border-bottom: 1px solid var(--line); display: grid; gap: 2px; }
+#log .meta { font: 11px var(--mono); color: var(--muted); }
+#log .act { font: 13px var(--mono); }
+#log .ov { color: var(--target); }
+#report { border-left: 4px solid var(--good); }
+#report[hidden] { display: none; }
+#report .body { padding: 12px 14px; display: grid; gap: 6px; }
+#report b { font-size: 22px; color: var(--good); }
+#report dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; }
+#report dt { font: 12px var(--mono); color: var(--muted); }
+#report dd { margin: 0; }
+.empty { padding: 14px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Rescue Scout</h1>
+  <span id="status">Waiting for a run</span>
+  <span id="run"></span>
+</header>
+<main>
+  <div style="display:grid; gap:16px; align-content:start; min-width:0">
+    <section class="card">
+      <h2>Camera</h2>
+      <img id="frame" alt="Latest frame from the scout's camera">
+      <div id="now"><span class="empty">Start brain/navigator.py and this fills in live.</span></div>
+    </section>
+    <section class="card">
+      <h2>Search plan (Nemotron Super)</h2>
+      <div id="plan">Scan the surroundings first.</div>
+    </section>
+  </div>
+  <div class="right">
+    <section class="card" id="report" hidden>
+      <h2>Report to incident command</h2>
+      <div class="body"><b>Person found</b><dl id="report-dl"></dl></div>
+    </section>
+    <section class="card">
+      <h2>Route from entry (breadcrumb map)</h2>
+      <canvas id="map"></canvas>
+    </section>
+    <section class="card">
+      <h2>Decision log</h2>
+      <ol id="log"><li class="empty">No steps yet.</li></ol>
+    </section>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let lastKey = "";
+
+function drawMap(steps, found) {
+  const c = $("map"), r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  c.width = r.width * dpr; c.height = r.height * dpr;
+  const g = c.getContext("2d"); g.scale(dpr, dpr);
+  const css = getComputedStyle(document.documentElement);
+  const col = (n) => css.getPropertyValue(n).trim();
+  g.fillStyle = col("--panel"); g.fillRect(0, 0, r.width, r.height);
+  const pts = [{ x: 0, y: 0 }].concat(steps.map((s) => s.pose || { x: 0, y: 0 }));
+  const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+  const span = Math.max(2, Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+  const scale = Math.min(r.width, r.height) * 0.8 / span;
+  const cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2;
+  const P = (p) => [r.width / 2 + (p.x - cx) * scale, r.height / 2 - (p.y - cy) * scale];
+  // 1 m grid
+  g.strokeStyle = col("--line"); g.lineWidth = 1;
+  for (let m = Math.floor(Math.min(...xs) - span); m <= Math.max(...xs) + span; m++) {
+    const [x] = P({ x: m, y: 0 }); g.beginPath(); g.moveTo(x, 0); g.lineTo(x, r.height); g.stroke();
+  }
+  for (let m = Math.floor(Math.min(...ys) - span); m <= Math.max(...ys) + span; m++) {
+    const [, y] = P({ x: 0, y: m }); g.beginPath(); g.moveTo(0, y); g.lineTo(r.width, y); g.stroke();
+  }
+  g.strokeStyle = col("--trail"); g.lineWidth = 2; g.beginPath();
+  pts.forEach((p, i) => { const [x, y] = P(p); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke();
+  g.fillStyle = col("--trail");
+  pts.forEach((p) => { const [x, y] = P(p); g.beginPath(); g.arc(x, y, 3, 0, 7); g.fill(); });
+  const [ex, ey] = P(pts[0]);
+  g.fillStyle = col("--muted"); g.font = "12px ui-monospace, monospace"; g.fillText("ENTRY", ex + 8, ey + 4);
+  const last = pts[pts.length - 1], [lx, ly] = P(last);
+  g.fillStyle = found ? col("--good") : col("--accent");
+  g.beginPath(); g.arc(lx, ly, 7, 0, 7); g.fill();
+  if (found) { g.fillStyle = col("--good"); g.fillText("PERSON", lx + 10, ly + 4); }
+  g.fillStyle = col("--muted"); g.fillText("grid = 1 m (estimated from moves)", 10, r.height - 10);
+}
+
+function render(data) {
+  const steps = data.steps || [];
+  $("run").textContent = data.run ? "run " + data.run : "";
+  if (!steps.length) return;
+  const s = steps[steps.length - 1], e = s.eyes || {};
+  $("frame").src = `/frames/${data.run}/${s.frame}`;
+  $("status").textContent = data.report ? "Person found, report ready" : `Step ${s.step} · ${s.secs}s per decision`;
+  $("status").style.color = data.report ? "var(--good)" : "var(--accent)";
+  $("now").innerHTML = "";
+  const o = document.createElement("div"); o.className = "obs"; o.textContent = e.observation || "";
+  const a = document.createElement("div"); a.className = "act";
+  a.textContent = "→ " + (e.action || "") + (e.override ? ` (override: ${e.override})` : "") + " · " + (e.reason || "");
+  $("now").append(o, a);
+  $("plan").textContent = s.plan || "";
+
+  $("log").innerHTML = "";
+  steps.slice().reverse().forEach((st) => {
+    const ev = st.eyes || {};
+    const li = document.createElement("li");
+    const m = document.createElement("div"); m.className = "meta";
+    m.textContent = `step ${st.step} · ${st.secs}s` + (st.check ? " · Cosmos check" : "") + (ev.person_visible ? " · person seen" : "");
+    const ob = document.createElement("div"); ob.textContent = ev.observation || "";
+    const ac = document.createElement("div"); ac.className = "act" + (ev.override ? " ov" : "");
+    ac.textContent = "→ " + (ev.action || "") + (ev.override ? ` (${ev.override})` : "");
+    li.append(m, ob, ac); $("log").append(li);
+  });
+
+  if (data.report) {
+    $("report").hidden = false;
+    const dl = $("report-dl"); dl.innerHTML = "";
+    [["Location", data.report.location], ["State", data.report.person_state || "unclear"],
+     ["Hazards", data.report.hazards || "none noted"], ["Steps", data.report.steps],
+     ["Seen", data.report.observation]].forEach(([k, v]) => {
+      const dt = document.createElement("dt"); dt.textContent = k;
+      const dd = document.createElement("dd"); dd.textContent = v;
+      dl.append(dt, dd);
+    });
+  } else $("report").hidden = true;
+  drawMap(steps, !!data.report);
+}
+
+async function poll() {
+  try {
+    const data = await (await fetch("/api/run")).json();
+    const key = data.run + ":" + (data.steps || []).length + ":" + !!data.report;
+    if (key !== lastKey) { lastKey = key; render(data); }
+  } catch (e) { $("status").textContent = "Dashboard can't reach app.py"; }
+  setTimeout(poll, 500);
+}
+window.addEventListener("resize", () => { lastKey = ""; });
+poll();
+</script>
+</body>
+</html>
