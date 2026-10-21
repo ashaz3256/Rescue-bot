@@ -52,12 +52,59 @@ class FrameSource:
             self.cap.release()
 
 
+def find_cameras(max_index: int = 5) -> list[int]:
+    """Return the camera indexes that open. The capture card is usually 1 if the laptop has a webcam."""
+    import cv2
+    found = []
+    for i in range(max_index):
+        cap = cv2.VideoCapture(i)
+        if cap.isOpened() and cap.read()[0]:
+            found.append(i)
+        cap.release()
+    return found
+
+
+def preview(source: str | int | None = None) -> None:
+    """Live window of the FPV feed. Press S to save a frame (good for test_photos), Q to quit."""
+    import cv2
+    source = config.CAMERA_SOURCE if source is None else source
+    cap = cv2.VideoCapture(int(source) if str(source).isdigit() else source)
+    if not cap.isOpened():
+        raise SystemExit(f"Could not open camera {source!r}. Try: python brain/video_in.py --list")
+    saved = 0
+    print("Live preview: S = save frame to test_photos/, Q = quit")
+    while True:
+        ok, frame = cap.read()
+        if not ok:
+            print("No frame from the capture card.")
+            break
+        cv2.imshow("Rescue Scout FPV", frame)
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord("q"):
+            break
+        if key == ord("s"):
+            out = os.path.join(os.path.dirname(__file__), "..", "test_photos", f"fpv_{saved:03d}.jpg")
+            cv2.imwrite(out, frame)
+            print("saved", os.path.normpath(out))
+            saved += 1
+    cap.release()
+    cv2.destroyAllWindows()
+
+
 if __name__ == "__main__":
-    # Quick check: save one frame from the configured source.
-    src = FrameSource()
-    img = src.get()
-    if img is None:
-        raise SystemExit("No frame received.")
-    img.save("frame_test.jpg")
-    print(f"Saved frame_test.jpg ({img.width}x{img.height})")
-    src.close()
+    import sys
+    if "--list" in sys.argv:
+        cams = find_cameras()
+        print("Cameras that work:", cams or "none found")
+        print("Put the capture card's number in .env as CAMERA_SOURCE")
+    elif "--show" in sys.argv:
+        preview()
+    else:
+        # Quick check: save one frame from the configured source.
+        src = FrameSource()
+        img = src.get()
+        if img is None:
+            raise SystemExit("No frame received.")
+        img.save("frame_test.jpg")
+        print(f"Saved frame_test.jpg ({img.width}x{img.height})")
+        src.close()

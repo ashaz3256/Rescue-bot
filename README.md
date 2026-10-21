@@ -72,7 +72,7 @@ DRY_RUN=0 CAR_IP=127.0.0.1 python brain/navigator.py --source test_photos   # te
 ### With the real car
 
 1. Flash `car/esp32_scout/` (see [car/README.md](car/README.md)) and put the printed IP in `.env` as `CAR_IP`.
-2. Plug the VRX into the capture card. `python brain/video_in.py` should save `frame_test.jpg`. Turn the VRX on-screen display off.
+2. Plug the VRX into a USB HDMI capture card. `python brain/video_in.py --list` finds its camera number (put it in `.env` as `CAMERA_SOURCE`), and `python brain/video_in.py --show` opens a live window (S saves a frame to `test_photos/`). Turn the VRX on-screen display off.
 3. Bench test with the wheels off the ground (steps in `car/README.md`).
 4. Set `DRY_RUN=0`, flip the transmitter to AUTO, and run `python brain/navigator.py`.
 
