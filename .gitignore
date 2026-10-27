@@ -23,3 +23,5 @@ Thumbs.db
 test_photos/*.jpg
 test_photos/*.jpeg
 test_photos/*.png
+test_photos/*.heic
+test_photos/*.HEIC
