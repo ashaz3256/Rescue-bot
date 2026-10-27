@@ -65,7 +65,7 @@ def main() -> None:
             try:
                 text, secs = models.ask(m, prompts.COMPARE, img)
             except Exception as e:  # keep going if one model errors
-                print(f"{m} | {photo} | ERROR {e}")
+                print(f"{m} | {photo} | ERROR {str(e)[:200]}")
                 continue
             s = stats[m]
             s["n"] += 1
@@ -97,6 +97,12 @@ def main() -> None:
             rows.append(row)
             print(f"{m:40s} | {photo:28s} | person={seen!s:5s} dist={data.get('person_distance_m')} "
                   f"| {secs:.1f}s {mark}")
+
+    if not rows:
+        print("\nNo answers came back: every call failed. Read the ERROR lines above.")
+        print("Usually it's a model name that isn't available on your account.")
+        print("Run:  python brain/vision_test.py --list   and put exact ids in .env (EYES_MODEL, CHECK_MODEL).")
+        sys.exit(1)
 
     out = os.path.join(ROOT, "results.csv")
     with open(out, "w", newline="") as f:
