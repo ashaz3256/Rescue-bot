@@ -40,7 +40,12 @@ SEND_HZ = 20
 # ---------- camera ----------
 # An int = capture card / webcam index. A path = video file or folder of images (for testing).
 CAMERA_SOURCE = _env("CAMERA_SOURCE", "0")
-MAX_IMAGE_SIDE = 768
+MAX_IMAGE_SIDE = int(_env("MAX_IMAGE_SIDE", "512"))  # smaller = faster
+
+# ---------- speed ----------
+THINKING = _env("THINKING", "off")      # "off" skips the model's reasoning phase when supported
+FAST_PROMPT = _flag("FAST_PROMPT", True)  # short JSON answer, action first
+MAX_REPEAT = 3                          # forward moves allowed per model call on clear floor
 
 # ---------- behaviour ----------
 DRY_RUN = _flag("DRY_RUN", True)       # True = print car commands instead of sending

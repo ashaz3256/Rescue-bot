@@ -36,7 +36,11 @@ Baselines for the model comparison only: `google/gemma-3-27b-it`, `openbmb/MiniC
 ## Token Factory API
 - OpenAI-compatible: `openai` package, `base_url="https://api.tokenfactory.nebius.com/v1"`, key from `NEBIUS_API_KEY`.
 - Never hard-code or commit keys. `.env` is gitignored; `.env.example` documents the variables.
-- Images: base64 JPEG data URLs, max 768 px. temperature 0.1–0.2.
+- Images: base64 JPEG data URLs, 512 px by default (MAX_IMAGE_SIDE). temperature 0.1–0.2.
+- Speed: short "fast" prompts with `action` first (FAST_PROMPT), reasoning switched off when the model allows
+  (THINKING=off, sent as `chat_template_kwargs.enable_thinking=false`, dropped automatically if rejected),
+  up to 3 forward moves per model call on clear floor. `vision_test.py --speed` measures the settings.
+- `obstacle_close` means within ~30 cm (prompts.CLOSE). Without that definition every model says "close".
 - Always parse the LAST `{...}` in the reply (reasoning models think first). Never crash on bad JSON.
 
 ## Laptop ↔ ESP32 contract (do not change without telling the whole team)

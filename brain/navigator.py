@@ -98,11 +98,17 @@ def run(goal: str, source: str | None) -> None:
             except Exception as e:
                 print(f"   planner failed: {e}")
 
-        prompt = prompts.EYES.format(goal=goal, plan=plan, memory="\n".join(memory[-10:]) or "(nothing yet)",
-                                     warning=warning)
+        if config.FAST_PROMPT:
+            prompt = prompts.EYES_FAST.format(goal=goal, plan=plan, warning=warning,
+                                              memory=" | ".join(memory[-5:]) or "nothing yet")
+            max_tokens = 250
+        else:
+            prompt = prompts.EYES.format(goal=goal, plan=plan, warning=warning, close=prompts.CLOSE,
+                                         memory="\n".join(memory[-10:]) or "(nothing yet)")
+            max_tokens = 600
         warning = ""
         try:
-            text, secs = models.ask(config.EYES_MODEL, prompt, img, max_tokens=600)
+            text, secs = models.ask(config.EYES_MODEL, prompt, img, max_tokens=max_tokens)
         except Exception as e:
             print(f"   eyes model failed: {e}")
             continue
@@ -130,7 +136,9 @@ def run(goal: str, source: str | None) -> None:
                 print(f"   check model failed: {e}")
 
         amount = float(d.get("amount") or 0.5)
-        print(f"{step:02d} | {d.get('observation')} -> {d['action']} {amount:.1f} | {d.get('reason')} ({secs:.1f}s)")
+        print(f"{step:02d} | {d.get('observation')} -> {d['action']} {amount:.1f}"
+              f"{' x' + str(d.get('repeat')) if d.get('repeat') and d['action'] == 'forward' else ''}"
+              f" | {d.get('reason', '')} ({secs:.1f}s)")
         memory.append(f"step {step} ({pose.describe()}): saw {d.get('observation')}; did {d['action']}")
         with open(log_path, "a") as f:
             f.write(json.dumps({"step": step, "time": time.time(), "frame": frame_file, "secs": round(secs, 2),
@@ -156,9 +164,25 @@ def run(goal: str, source: str | None) -> None:
             print("Model stopped without finding anyone.")
             break
 
-        car.do(d["action"], amount)
-        pose.update(d["action"], amount)
-        prev_img, last_action = img, d["action"]
+        # On clearly open floor the model may ask for up to MAX_REPEAT forward moves per call.
+        # Between extra moves we only do the cheap stuck check, no model call.
+        repeat = 1
+        if d["action"] == "forward" and not d.get("obstacle_close"):
+            try:
+                repeat = max(1, min(config.MAX_REPEAT, int(d.get("repeat") or 1)))
+            except (TypeError, ValueError):
+                repeat = 1
+        before = img
+        for r in range(repeat):
+            car.do(d["action"], amount)
+            pose.update(d["action"], amount)
+            if r < repeat - 1:
+                after = frames.get()
+                if after is None or frame_diff(before, after) < config.STUCK_DIFF:
+                    warning = "WARNING: a forward move did not change the view, you are probably stuck."
+                    break
+                before = after
+        prev_img, last_action = before, d["action"]
     else:
         print("Ran out of steps.")
 

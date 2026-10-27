@@ -1,5 +1,10 @@
 """Prompts for each model. Tune these against test_photos/ with vision_test.py."""
 
+# Shared definition: without it every model calls almost everything "close".
+CLOSE = ("obstacle_close means something solid is within about 30 cm of the camera: "
+         "it fills the bottom third of the frame or blocks the floor right in front. "
+         "Things further away are NOT close. Stairs going up count as an obstacle.")
+
 EYES = """You are the camera of a small search-and-rescue robot car at floor level,
 searching a building for people before firefighters go in. There is no map.
 
@@ -22,6 +27,7 @@ Look at the image and reply with ONLY this JSON, nothing else:
  "reason": "one sentence"}}
 
 Rules:
+- {close}
 - If an obstacle is close, never choose forward.
 - Treat partly hidden shapes on the floor (legs, clothing, an arm) as possible people.
 - done = true only when a person is within about 1 metre.
@@ -39,7 +45,9 @@ Be specific, e.g. "Hall checked, east door shut. Try the doorway on the north wa
 """
 
 CHECK = """You are guiding a small robot car (about 30 cm long, 10 cm tall) at floor level.
-Look at the image, reason about the physical scene, then reply with ONLY JSON:
+Look at the image, reason about the physical scene, then reply with ONLY JSON.
+""" + CLOSE + """
+
 {"person_present": true or false,
  "person_distance_m": number or null,
  "person_state": "moving" | "not moving" | "unclear" | null,
@@ -50,6 +58,7 @@ Look at the image, reason about the physical scene, then reply with ONLY JSON:
  "reason": "one sentence"}"""
 
 COMPARE = """You are the camera of a small search-and-rescue robot at floor level.
+""" + CLOSE + """
 Look at the image and reply with ONLY JSON:
 {"person_visible": true or false,
  "person_bearing": "left" | "centre" | "right" | null,
@@ -57,3 +66,21 @@ Look at the image and reply with ONLY JSON:
  "obstacle_close": true or false,
  "safe_direction": "forward" | "left" | "right" | "back",
  "observation": "one short sentence"}"""
+
+
+# ---------- fast versions: short answer, action first ----------
+EYES_FAST = """Search-and-rescue robot car camera at floor level. No map. GOAL: {goal}
+PLAN: {plan}
+RECENT: {memory}
+{warning}
+""" + CLOSE + """
+Never choose forward if obstacle_close. If no person is visible, turn to scan, then head for doorways and open floor.
+Partly hidden shapes on the floor (legs, clothing) may be people. done=true only when a person is within 1 m.
+repeat = how many forward moves are safe in a row (1-3), only when the floor ahead is clearly open.
+Reply with ONLY this JSON, no other text:
+{{"action":"forward|left|right|back|stop","amount":0.2-1.0,"repeat":1,"obstacle_close":false,"person_visible":false,"person_bearing":null,"person_distance_m":null,"done":false,"observation":"max 8 words"}}"""
+
+COMPARE_FAST = """Search-and-rescue robot camera at floor level.
+""" + CLOSE + """
+Reply with ONLY this JSON, no other text:
+{"safe_direction":"forward|left|right|back","obstacle_close":false,"person_visible":false,"person_bearing":null,"person_distance_m":null,"observation":"max 8 words"}"""

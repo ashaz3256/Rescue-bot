@@ -58,7 +58,7 @@ cp .env.example .env                                  # then add your NEBIUS_API
 ```
 
 1. **Check model ids:** `python brain/vision_test.py --list`, then put the exact ids in `.env`.
-2. **Compare models:** put photos in `test_photos/` (see its README) and run `python brain/vision_test.py`.
+2. **Compare models:** put photos in `test_photos/` (see its README) and run `python brain/vision_test.py`. Add `--speed` to compare speed settings for the eyes model.
 3. **Dry run the brain on photos:** `python brain/navigator.py --source test_photos`
 4. **Watch it:** in a second terminal, `python dashboard/app.py`, then open http://localhost:5000
 
