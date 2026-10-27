@@ -1,8 +1,8 @@
 """Prompts for each model. Tune these against test_photos/ with vision_test.py."""
 
-# Where things touch the floor, as a % of image height (0 = top edge, 100 = bottom edge).
-# The code turns these into measured centimetres using calibration/camera.json.
-FLOOR_ROWS = ("ahead_floor_y = the height in the image (0 top to 100 bottom) where the nearest object in the "
+# Where things touch the floor, on the 0-1000 image scale vision models use natively
+# (0 = top edge, 1000 = bottom edge). The code turns these into centimetres with calibration/camera.json.
+FLOOR_ROWS = ("ahead_floor_y = the height in the image (0 top to 1000 bottom) where the nearest object in the "
               "car's path (middle third of the image) touches the floor, or null if the path is clear. "
               "person_floor_y = the same for the lowest point of the person (feet, legs or body on the floor), or null.")
 
@@ -25,8 +25,8 @@ Look at the image and reply with ONLY this JSON, nothing else:
  "person_bearing": "left" | "centre" | "right" | null,
  "person_distance_m": number or null,
  "obstacle_close": true or false,
- "ahead_floor_y": 0-100 or null,
- "person_floor_y": 0-100 or null,
+ "ahead_floor_y": 0-1000 or null,
+ "person_floor_y": 0-1000 or null,
  "openings": "doorways or gaps you can see, or none",
  "hazards": "smoke, fire, water, debris... or none",
  "action": "forward" | "left" | "right" | "back" | "stop",

@@ -80,13 +80,18 @@ Every run is saved to `data/runs/<timestamp>/`: frames, `log.jsonl`, and `report
 
 ## Model comparison
 
-Same photos, same prompt (`brain/vision_test.py`). Results to come.
+Same 34 photos (indoor, camera at floor level), same prompt, run with `brain/vision_test.py`.
+Target for this round: a stand-in object (an orange spray can) in 13 photos, absent from the other 21.
 
-| Model | Person found | Avg distance error | Avg seconds per frame |
+| Model | Found the target | False alarms | Avg seconds per photo |
 |---|---|---|---|
-| Nemotron 3.5 Super VL (used) | – | – | – |
-| Gemma 3 27B (baseline) | – | – | – |
-| MiniCPM-V 4.5 (baseline) | – | – | – |
+| **Nemotron 3.5 Super VL (used)** | **12 / 13** | **0 / 21** | **1.0** |
+| Gemma 3 27B (baseline) | 13 / 13 | 0 / 21 | 3.6 |
+| MiniCPM-V 4.5 (baseline) | 0 / 13 | 0 / 21 | 0.6 |
+
+Nemotron's only miss was the can at about 4 m (53 px tall). In an earlier round with no target present,
+Gemma reported a person who wasn't there in 2 of 19 photos; Nemotron reported none. Switching to a short
+prompt, 512 px images and no reasoning step cut Nemotron from about 4.0 s to 1.0 s per decision.
 
 ## Limits (honest list)
 

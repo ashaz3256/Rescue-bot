@@ -28,6 +28,7 @@ try:
     CAL = ranging.load()
 except (OSError, ValueError, KeyError):
     CAL = None
+USE_CAL_FOR_DISTANCE = False  # set by --fpv
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 PHOTO_DIR = os.path.join(ROOT, "test_photos")
@@ -52,6 +53,8 @@ def main() -> None:
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--models", nargs="*")
     ap.add_argument("--speed", action="store_true", help="compare speed settings for EYES_MODEL")
+    ap.add_argument("--fpv", action="store_true",
+                    help="photos are from the calibrated car camera: score calibrated distances")
     ap.add_argument("--target", default=None, help='what to look for, e.g. "an antiperspirant can"')
     args = ap.parse_args()
 
@@ -59,6 +62,8 @@ def main() -> None:
         print("\n".join(models.list_models()))
         return
 
+    global USE_CAL_FOR_DISTANCE
+    USE_CAL_FOR_DISTANCE = args.fpv
     target = args.target or config.TARGET
     print(f"Looking for: {target}  (answers.csv 'person' column = is it in the photo, yes/no)\n")
     # Each variant = one row in the summary: (label, model, prompt, image size, thinking, max tokens)
@@ -105,12 +110,13 @@ def main() -> None:
                 continue
             # Measured distances from the calibration, where the model gave floor rows
             for key, out in (("ahead_floor_y", "ahead_cm"), ("person_floor_y", "person_cm")):
-                try:
-                    cm = ranging.distance_cm(float(data.get(key)) / 100.0, CAL) if CAL else None
+                frac = ranging.to_fraction(data.get(key))
+                if CAL and frac is not None:
+                    cm = ranging.distance_cm(frac, CAL)
                     row[out] = None if cm is None else round(cm)
-                except (TypeError, ValueError):
-                    pass
-            if row.get("person_cm") is not None and data.get("person_visible"):
+            # Only replace the model's own distance guess with the calibrated one for photos from the
+            # calibrated camera (FPV frames). Phone photos have a different lens and height.
+            if USE_CAL_FOR_DISTANCE and row.get("person_cm") is not None and data.get("person_visible"):
                 data["person_distance_m"] = round(row["person_cm"] / 100, 2)
             seen = bool(data.get("person_visible"))
             s["seen"] += int(seen)

@@ -32,6 +32,20 @@ def fit(points: list[tuple[float, float]]) -> dict:
     return {"horizon": horizon, "k": k}
 
 
+def to_fraction(value) -> float | None:
+    """A model's row answer -> fraction of image height. Accepts the 0-1000 scale we ask for,
+    and a 0-1 fraction if a model answers that way. Anything else -> None."""
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+    if 0 <= v <= 1:
+        return v
+    if 1 < v <= 1000:
+        return v / 1000.0
+    return None
+
+
 def distance_cm(row_fraction: float, cal: dict | None = None) -> float | None:
     """Row where an object meets the floor (0 = top of frame, 1 = bottom) -> distance in cm.
     Returns None at or above the horizon (too far to measure)."""

@@ -39,18 +39,15 @@ except (OSError, ValueError, KeyError):
 
 
 def measure(d: dict) -> None:
-    """Replace guessed distances with calibrated ones where the model gave a floor row (0-100).
+    """Replace guessed distances with calibrated ones where the model gave a floor row (0-1000).
     Adds ahead_cm / person_cm to the decision and sets obstacle_close from the measurement."""
     if _cal is None:
         return
     for key, out in (("ahead_floor_y", "ahead_cm"), ("person_floor_y", "person_cm")):
-        try:
-            row = float(d.get(key))
-        except (TypeError, ValueError):
+        row = ranging.to_fraction(d.get(key))
+        if row is None:
             continue
-        if not 0 <= row <= 100:
-            continue
-        cm = ranging.distance_cm(row / 100.0, _cal)
+        cm = ranging.distance_cm(row, _cal)
         d[out] = None if cm is None else round(cm)
     if d.get("ahead_cm") is not None:
         d["obstacle_close"] = d["ahead_cm"] < config.STOP_CM
