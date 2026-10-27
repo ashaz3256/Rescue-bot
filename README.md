@@ -19,9 +19,9 @@ Walksnail camera (car) → Avatar VRX → HDMI → capture card → laptop
                                                              │
                      ┌───────────────────────────────────────┤
                      ▼                                       │
-  Eyes      Nemotron 3 Nano Omni   every step: what's here, person?, obstacle?, next move
-  Planner   Nemotron 3 Super       every 5 steps: reads the log, picks where to search next
-  Check     Cosmos 3 Reasoner      when a person is first seen: distance, path clear?
+  Eyes      Nemotron 3.5 Super VL  every step: what's here, person?, obstacle?, next move
+  Planner   Nemotron 3.5 Lightning every 5 steps: reads the log, picks where to search next
+  Check     Nemotron 3.5 Super VL  when a person is first seen: distance, path clear?
   Reflexes  our code               safety override, stuck detection, watchdog
                      │
                      ▼
@@ -84,8 +84,9 @@ Same photos, same prompt (`brain/vision_test.py`). Results to come.
 
 | Model | Person found | Avg distance error | Avg seconds per frame |
 |---|---|---|---|
-| Nemotron 3 Nano Omni | – | – | – |
-| Cosmos 3 Super Reasoner | – | – | – |
+| Nemotron 3.5 Super VL (used) | – | – | – |
+| Gemma 3 27B (baseline) | – | – | – |
+| MiniCPM-V 4.5 (baseline) | – | – | – |
 
 ## Limits (honest list)
 

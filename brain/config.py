@@ -21,10 +21,15 @@ API_BASE = _env("NEBIUS_BASE_URL", "https://api.tokenfactory.nebius.com/v1")
 API_KEY = os.environ.get("NEBIUS_API_KEY", "")
 
 # Check exact ids with:  python brain/vision_test.py --list
-EYES_MODEL = _env("EYES_MODEL", "nvidia/Nemotron-3-Nano-Omni")            # every step
-PLANNER_MODEL = _env("PLANNER_MODEL", "nvidia/nemotron-3-super-120b-a12b")  # every PLAN_EVERY steps
-CHECK_MODEL = _env("CHECK_MODEL", "nvidia/Cosmos3-Super-Reasoner")        # key moments
-COMPARE_MODELS = [EYES_MODEL, CHECK_MODEL]                                # used by vision_test.py
+# Only models marked "Public" in Token Factory work with a normal API key.
+EYES_MODEL = _env("EYES_MODEL", "nvidia/Nemotron-3.5-Super-VL")        # vision, every step
+PLANNER_MODEL = _env("PLANNER_MODEL", "nvidia/Nemotron-3_5-Lightning")  # text, every PLAN_EVERY steps
+CHECK_MODEL = _env("CHECK_MODEL", "nvidia/Nemotron-3.5-Super-VL")       # vision, when a person is first seen
+# Models vision_test.py compares (comma-separated). Non-NVIDIA open models are baselines only.
+COMPARE_MODELS = list(dict.fromkeys(
+    m.strip() for m in _env("COMPARE_MODELS",
+                            "nvidia/Nemotron-3.5-Super-VL,google/gemma-3-27b-it,openbmb/MiniCPM-V-4_5").split(",")
+    if m.strip()))
 
 # ---------- car link (see CLAUDE.md for the UDP contract) ----------
 CAR_IP = _env("CAR_IP", "192.168.1.60")  # printed on the ESP32 Serial Monitor at boot
