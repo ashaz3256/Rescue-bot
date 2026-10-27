@@ -20,6 +20,7 @@ from PIL import Image, ImageChops, ImageStat
 import config
 import models
 import prompts
+import ranging
 from car_link import CarLink
 from video_in import FrameSource
 
@@ -28,6 +29,35 @@ def frame_diff(a: Image.Image, b: Image.Image) -> float:
     """Mean pixel change between two frames; near 0 after a forward move means we're stuck."""
     a, b = a.convert("L").resize((64, 48)), b.convert("L").resize((64, 48))
     return ImageStat.Stat(ImageChops.difference(a, b)).mean[0]
+
+
+_cal = None
+try:
+    _cal = ranging.load()
+except (OSError, ValueError, KeyError):
+    print("No calibration/camera.json: distances will be the model's guesses.")
+
+
+def measure(d: dict) -> None:
+    """Replace guessed distances with calibrated ones where the model gave a floor row (0-100).
+    Adds ahead_cm / person_cm to the decision and sets obstacle_close from the measurement."""
+    if _cal is None:
+        return
+    for key, out in (("ahead_floor_y", "ahead_cm"), ("person_floor_y", "person_cm")):
+        try:
+            row = float(d.get(key))
+        except (TypeError, ValueError):
+            continue
+        if not 0 <= row <= 100:
+            continue
+        cm = ranging.distance_cm(row / 100.0, _cal)
+        d[out] = None if cm is None else round(cm)
+    if d.get("ahead_cm") is not None:
+        d["obstacle_close"] = d["ahead_cm"] < config.STOP_CM
+    if d.get("person_cm") is not None and d.get("person_visible"):
+        d["person_distance_m"] = round(d["person_cm"] / 100, 2)
+        if d["person_cm"] <= config.FOUND_CM:
+            d["done"] = True
 
 
 class Pose:
@@ -104,6 +134,7 @@ def run(goal: str, source: str | None) -> None:
             max_tokens = 250
         else:
             prompt = prompts.EYES.format(goal=goal, plan=plan, warning=warning, close=prompts.CLOSE,
+                                         floor_rows=prompts.FLOOR_ROWS,
                                          memory="\n".join(memory[-10:]) or "(nothing yet)")
             max_tokens = 600
         warning = ""
@@ -116,6 +147,9 @@ def run(goal: str, source: str | None) -> None:
         if not d or "action" not in d:
             print("   bad model output, skipping step")
             continue
+
+        # Measured distances: the model says WHERE things touch the floor, the calibration says HOW FAR.
+        measure(d)
 
         # Safety override: never drive into something the model itself flagged.
         if d.get("obstacle_close") and d["action"] == "forward":
@@ -138,6 +172,8 @@ def run(goal: str, source: str | None) -> None:
         amount = float(d.get("amount") or 0.5)
         print(f"{step:02d} | {d.get('observation')} -> {d['action']} {amount:.1f}"
               f"{' x' + str(d.get('repeat')) if d.get('repeat') and d['action'] == 'forward' else ''}"
+              f"{' | ahead ' + str(d['ahead_cm']) + 'cm' if d.get('ahead_cm') is not None else ''}"
+              f"{' | person ' + str(d['person_cm']) + 'cm' if d.get('person_cm') is not None else ''}"
               f" | {d.get('reason', '')} ({secs:.1f}s)")
         memory.append(f"step {step} ({pose.describe()}): saw {d.get('observation')}; did {d['action']}")
         with open(log_path, "a") as f:

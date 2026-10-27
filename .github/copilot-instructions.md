@@ -41,6 +41,10 @@ Baselines for the model comparison only: `google/gemma-3-27b-it`, `openbmb/MiniC
   (THINKING=off, sent as `chat_template_kwargs.enable_thinking=false`, dropped automatically if rejected),
   up to 3 forward moves per model call on clear floor. `vision_test.py --speed` measures the settings.
 - `obstacle_close` means within ~30 cm (prompts.CLOSE). Without that definition every model says "close".
+- Measured distance: the model reports WHERE things touch the floor (`ahead_floor_y`, `person_floor_y`, 0–100 of
+  image height); `ranging.py` turns that into cm with `calibration/camera.json` (row = horizon + k/d, fitted from
+  ruler photos). Measured values override the model's guesses (STOP_CM, FOUND_CM in config). Accurate under ~1 m.
+  Recalibrate if the camera mount changes.
 - Always parse the LAST `{...}` in the reply (reasoning models think first). Never crash on bad JSON.
 
 ## Laptop ↔ ESP32 contract (do not change without telling the whole team)

@@ -22,6 +22,12 @@ from PIL import Image
 import config
 import models
 import prompts
+import ranging
+
+try:
+    CAL = ranging.load()
+except (OSError, ValueError, KeyError):
+    CAL = None
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 PHOTO_DIR = os.path.join(ROOT, "test_photos")
@@ -94,6 +100,15 @@ def main() -> None:
                 print(f"{m:40s} | {photo:28s} | unparseable ({secs:.1f}s)")
                 rows.append(row)
                 continue
+            # Measured distances from the calibration, where the model gave floor rows
+            for key, out in (("ahead_floor_y", "ahead_cm"), ("person_floor_y", "person_cm")):
+                try:
+                    cm = ranging.distance_cm(float(data.get(key)) / 100.0, CAL) if CAL else None
+                    row[out] = None if cm is None else round(cm)
+                except (TypeError, ValueError):
+                    pass
+            if row.get("person_cm") is not None and data.get("person_visible"):
+                data["person_distance_m"] = round(row["person_cm"] / 100, 2)
             seen = bool(data.get("person_visible"))
             s["seen"] += int(seen)
             s["close"] += int(bool(data.get("obstacle_close")))
@@ -111,10 +126,11 @@ def main() -> None:
                     except (TypeError, ValueError):
                         pass
             row.update({k: data.get(k) for k in ("person_visible", "person_bearing", "person_distance_m",
-                                                  "obstacle_close", "safe_direction", "observation")})
+                                                  "obstacle_close", "safe_direction", "observation",
+                                                  "ahead_floor_y", "person_floor_y")})
             rows.append(row)
             print(f"{m:40s} | {photo:28s} | person={seen!s:5s} dist={data.get('person_distance_m')} "
-                  f"| {secs:.1f}s {mark}")
+                  f"ahead={row.get('ahead_cm')}cm | {secs:.1f}s {mark}")
 
     if not rows:
         print("\nNo answers came back: every call failed. Read the ERROR lines above.")

@@ -51,7 +51,9 @@ MAX_REPEAT = 3                          # forward moves allowed per model call o
 DRY_RUN = _flag("DRY_RUN", True)       # True = print car commands instead of sending
 MAX_STEPS = int(_env("MAX_STEPS", "60"))
 PLAN_EVERY = 5
-STUCK_DIFF = 3.0                       # mean pixel change below this after "forward" = stuck
+STUCK_DIFF = 3.0
+STOP_CM = float(_env("STOP_CM", "30"))     # measured obstacle closer than this = obstacle_close
+FOUND_CM = float(_env("FOUND_CM", "100"))  # measured person closer than this = done                       # mean pixel change below this after "forward" = stuck
 
 # One "move" at amount=1.0. Tune these on the real car.
 FORWARD_SECONDS = 0.8

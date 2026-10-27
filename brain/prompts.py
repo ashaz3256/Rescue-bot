@@ -1,5 +1,11 @@
 """Prompts for each model. Tune these against test_photos/ with vision_test.py."""
 
+# Where things touch the floor, as a % of image height (0 = top edge, 100 = bottom edge).
+# The code turns these into measured centimetres using calibration/camera.json.
+FLOOR_ROWS = ("ahead_floor_y = the height in the image (0 top to 100 bottom) where the nearest object in the "
+              "car's path (middle third of the image) touches the floor, or null if the path is clear. "
+              "person_floor_y = the same for the lowest point of the person (feet, legs or body on the floor), or null.")
+
 # Shared definition: without it every model calls almost everything "close".
 CLOSE = ("obstacle_close means something solid is within about 30 cm of the camera: "
          "it fills the bottom third of the frame or blocks the floor right in front. "
@@ -19,6 +25,8 @@ Look at the image and reply with ONLY this JSON, nothing else:
  "person_bearing": "left" | "centre" | "right" | null,
  "person_distance_m": number or null,
  "obstacle_close": true or false,
+ "ahead_floor_y": 0-100 or null,
+ "person_floor_y": 0-100 or null,
  "openings": "doorways or gaps you can see, or none",
  "hazards": "smoke, fire, water, debris... or none",
  "action": "forward" | "left" | "right" | "back" | "stop",
@@ -28,6 +36,7 @@ Look at the image and reply with ONLY this JSON, nothing else:
 
 Rules:
 - {close}
+- {floor_rows}
 - If an obstacle is close, never choose forward.
 - Treat partly hidden shapes on the floor (legs, clothing, an arm) as possible people.
 - done = true only when a person is within about 1 metre.
@@ -77,10 +86,12 @@ RECENT: {memory}
 Never choose forward if obstacle_close. If no person is visible, turn to scan, then head for doorways and open floor.
 Partly hidden shapes on the floor (legs, clothing) may be people. done=true only when a person is within 1 m.
 repeat = how many forward moves are safe in a row (1-3), only when the floor ahead is clearly open.
+""" + FLOOR_ROWS + """
 Reply with ONLY this JSON, no other text:
-{{"action":"forward|left|right|back|stop","amount":0.2-1.0,"repeat":1,"obstacle_close":false,"person_visible":false,"person_bearing":null,"person_distance_m":null,"done":false,"observation":"max 8 words"}}"""
+{{"action":"forward|left|right|back|stop","amount":0.2-1.0,"repeat":1,"obstacle_close":false,"ahead_floor_y":null,"person_visible":false,"person_bearing":null,"person_floor_y":null,"person_distance_m":null,"done":false,"observation":"max 8 words"}}"""
 
 COMPARE_FAST = """Search-and-rescue robot camera at floor level.
 """ + CLOSE + """
+""" + FLOOR_ROWS + """
 Reply with ONLY this JSON, no other text:
-{"safe_direction":"forward|left|right|back","obstacle_close":false,"person_visible":false,"person_bearing":null,"person_distance_m":null,"observation":"max 8 words"}"""
+{"safe_direction":"forward|left|right|back","obstacle_close":false,"ahead_floor_y":null,"person_visible":false,"person_bearing":null,"person_floor_y":null,"person_distance_m":null,"observation":"max 8 words"}"""
