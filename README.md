@@ -83,15 +83,19 @@ Every run is saved to `data/runs/<timestamp>/`: frames, `log.jsonl`, and `report
 Same 34 photos (indoor, camera at floor level), same prompt, run with `brain/vision_test.py`.
 Target for this round: a stand-in object (an orange spray can) in 13 photos, absent from the other 21.
 
-| Model | Found the target | False alarms | Avg seconds per photo |
-|---|---|---|---|
-| **Nemotron 3.5 Super VL (used)** | **12 / 13** | **0 / 21** | **1.0** |
-| Gemma 3 27B (baseline) | 13 / 13 | 0 / 21 | 3.6 |
-| MiniCPM-V 4.5 (baseline) | 0 / 13 | 0 / 21 | 0.6 |
+| Model | Found the target | False alarms | Floor-contact position error | Avg seconds | Endpoint |
+|---|---|---|---|---|---|
+| **Nemotron 3.5 Super VL (used)** | **12 / 13** | **0 / 21** | **1.7%** of image height | **1.1** | Public (per token) |
+| Cosmos 3 Super Reasoner | 12 / 13 | 0 / 21 | 13.6% | 1.5 | Dedicated ($9.40/h) |
+| Gemma 3 27B | 13 / 13 | 0 / 21 | – | 3.6 | Public |
+| MiniCPM-V 4.5 | 0 / 13 | 0 / 21 | – | 0.6 | Public |
 
-Nemotron's only miss was the can at about 4 m (53 px tall). In an earlier round with no target present,
-Gemma reported a person who wasn't there in 2 of 19 photos; Nemotron reported none. Switching to a short
-prompt, 512 px images and no reasoning step cut Nemotron from about 4.0 s to 1.0 s per decision.
+- **Position error** is how far the model's "where the target touches the floor" answer was from the can's real base,
+  measured from the photos by colour. It matters because our distance calibration turns that position into centimetres.
+- Nemotron and Cosmos tied on spotting (both missed only the can at about 4 m), but Nemotron located it about
+  8x more precisely, was faster, and runs on a public pay-per-use endpoint.
+- In an earlier round with no target present, Gemma reported a person who wasn't there in 2 of 19 photos; Nemotron reported none.
+- Switching to a short prompt, 512 px images and no reasoning step cut Nemotron from about 4.0 s to about 1 s per decision.
 
 ## Limits (honest list)
 
