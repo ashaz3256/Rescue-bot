@@ -52,12 +52,15 @@ def main() -> None:
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--models", nargs="*")
     ap.add_argument("--speed", action="store_true", help="compare speed settings for EYES_MODEL")
+    ap.add_argument("--target", default=None, help='what to look for, e.g. "an antiperspirant can"')
     args = ap.parse_args()
 
     if args.list:
         print("\n".join(models.list_models()))
         return
 
+    target = args.target or config.TARGET
+    print(f"Looking for: {target}  (answers.csv 'person' column = is it in the photo, yes/no)\n")
     # Each variant = one row in the summary: (label, model, prompt, image size, thinking, max tokens)
     fast_prompt = prompts.COMPARE_FAST if config.FAST_PROMPT else prompts.COMPARE
     if args.speed:
@@ -84,7 +87,7 @@ def main() -> None:
         truth = answers.get(photo)
         for m, model_id, prompt, side, thinking, max_tokens in variants:
             try:
-                text, secs = models.ask(model_id, prompt, img, max_tokens=max_tokens,
+                text, secs = models.ask(model_id, prompts.with_target(prompt, target), img, max_tokens=max_tokens,
                                         image_side=side, thinking=thinking)
             except Exception as e:  # keep going if one model errors
                 print(f"{m} | {photo} | ERROR {str(e)[:200]}")

@@ -87,7 +87,8 @@ class Pose:
         return f"{dist:.1f} m {names[int((bearing + 22.5) // 45) % 8]} of the entry"
 
 
-def run(goal: str, source: str | None) -> None:
+def run(goal: str, source: str | None, target: str | None = None) -> None:
+    target = target or config.TARGET
     run_dir = os.path.join(config.RUNS_DIR, time.strftime("%Y%m%d-%H%M%S"))
     os.makedirs(run_dir, exist_ok=True)
     log_path = os.path.join(run_dir, "log.jsonl")
@@ -101,7 +102,7 @@ def run(goal: str, source: str | None) -> None:
     prev_img: Image.Image | None = None
     last_action = ""
     checked_person = False
-    print(f"Goal: {goal}\nLogging to {run_dir}\n{'DRY RUN' if car.dry_run else 'LIVE CAR'}\n")
+    print(f"Goal: {goal}\nTarget: {target}\nLogging to {run_dir}\n{'DRY RUN' if car.dry_run else 'LIVE CAR'}\n")
 
     for step in range(config.MAX_STEPS):
         # Only move when the transmitter switch says AUTO. MANUAL always wins.
@@ -139,7 +140,7 @@ def run(goal: str, source: str | None) -> None:
             max_tokens = 600
         warning = ""
         try:
-            text, secs = models.ask(config.EYES_MODEL, prompt, img, max_tokens=max_tokens)
+            text, secs = models.ask(config.EYES_MODEL, prompts.with_target(prompt, target), img, max_tokens=max_tokens)
         except Exception as e:
             print(f"   eyes model failed: {e}")
             continue
@@ -160,7 +161,7 @@ def run(goal: str, source: str | None) -> None:
         if d.get("person_visible") and not checked_person:
             checked_person = True
             try:
-                ctext, _ = models.ask(config.CHECK_MODEL, prompts.CHECK, img)
+                ctext, _ = models.ask(config.CHECK_MODEL, prompts.with_target(prompts.CHECK, target), img)
                 check = models.parse_json(ctext)
                 if check:
                     print(f"   [check] {check.get('reason')}")
@@ -230,5 +231,9 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--goal", default="search for people and report where they are")
     ap.add_argument("--source", default=None, help="camera index, video file, or folder of images")
+    ap.add_argument("--target", default=None, help='what to search for, e.g. "an antiperspirant can"')
     args = ap.parse_args()
-    run(args.goal, args.source)
+    goal = args.goal
+    if args.target and goal == ap.get_default("goal"):
+        goal = f"find {args.target} and stop next to it"
+    run(goal, args.source, args.target)

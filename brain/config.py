@@ -42,6 +42,9 @@ SEND_HZ = 20
 CAMERA_SOURCE = _env("CAMERA_SOURCE", "0")
 MAX_IMAGE_SIDE = int(_env("MAX_IMAGE_SIDE", "512"))  # smaller = faster
 
+# What the scout searches for. "person" for real runs; any object for tests, e.g. "an antiperspirant can".
+TARGET = _env("TARGET", "person")
+
 # ---------- speed ----------
 THINKING = _env("THINKING", "off")      # "off" skips the model's reasoning phase when supported
 FAST_PROMPT = _flag("FAST_PROMPT", True)  # short JSON answer, action first

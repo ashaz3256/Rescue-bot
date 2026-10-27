@@ -45,6 +45,8 @@ Baselines for the model comparison only: `google/gemma-3-27b-it`, `openbmb/MiniC
   image height); `ranging.py` turns that into cm with `calibration/camera.json` (row = horizon + k/d, fitted from
   ruler photos). Measured values override the model's guesses (STOP_CM, FOUND_CM in config). Accurate under ~1 m.
   Recalibrate if the camera mount changes.
+- Search target is configurable (TARGET in .env, or --target on vision_test/navigator). For a test object the
+  prompts get a header saying person_* fields refer to that object; JSON keys stay the same.
 - Always parse the LAST `{...}` in the reply (reasoning models think first). Never crash on bad JSON.
 
 ## Laptop ↔ ESP32 contract (do not change without telling the whole team)

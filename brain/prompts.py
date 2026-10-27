@@ -95,3 +95,13 @@ COMPARE_FAST = """Search-and-rescue robot camera at floor level.
 """ + FLOOR_ROWS + """
 Reply with ONLY this JSON, no other text:
 {"safe_direction":"forward|left|right|back","obstacle_close":false,"ahead_floor_y":null,"person_visible":false,"person_bearing":null,"person_floor_y":null,"person_distance_m":null,"observation":"max 8 words"}"""
+
+
+def with_target(prompt: str, target: str) -> str:
+    """Point any prompt at a different search target (e.g. a test object) without changing the JSON keys.
+    For the default target ("person") the prompt is returned unchanged."""
+    if not target or target.strip().lower() in ("person", "a person", "people"):
+        return prompt
+    return (f"SEARCH TARGET for this run: {target}. It replaces 'person' everywhere below: every person_* "
+            f"field (person_visible, person_floor_y, person_present...) is about the {target}, "
+            f"and 'done' means the {target} is within 1 m. Ignore the rules about people.\n\n" + prompt)
