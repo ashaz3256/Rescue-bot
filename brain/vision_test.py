@@ -77,7 +77,7 @@ def main() -> None:
             ("D short, 384px, no thinking", em, prompts.COMPARE_FAST, 384, "off", 300),
         ]
     else:
-        variants = [(m, m, fast_prompt, None, None, 600) for m in (args.models or config.COMPARE_MODELS)]
+        variants = [(m, m, fast_prompt, None, None, 2000) for m in (args.models or config.COMPARE_MODELS)]  # room for reasoning models
     model_ids = [v[0] for v in variants]
     answers = load_answers()
     photos = sorted(f for f in os.listdir(PHOTO_DIR) if f.lower().endswith((".jpg", ".jpeg", ".png")))
