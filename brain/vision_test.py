@@ -30,8 +30,14 @@ def load_answers() -> dict[str, dict]:
     path = os.path.join(PHOTO_DIR, "answers.csv")
     if not os.path.exists(path):
         return {}
-    with open(path, newline="") as f:
-        return {row["file"]: row for row in csv.DictReader(f)}
+    # utf-8-sig copes with the BOM Windows Notepad / PowerShell can add
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        rows = {}
+        for row in csv.DictReader(f):
+            row = {(k or "").strip().lower(): (v or "").strip() for k, v in row.items()}
+            if row.get("file"):
+                rows[row["file"]] = row
+        return rows
 
 
 def main() -> None:
