@@ -99,6 +99,22 @@ if __name__ == "__main__":
         print("Put the capture card's number in .env as CAMERA_SOURCE")
     elif "--show" in sys.argv:
         preview()
+    elif "--snap" in sys.argv:
+        # No window needed: press Enter in the terminal to save the current camera frame.
+        src = FrameSource()
+        out_dir = os.path.join(os.path.dirname(__file__), "..", "test_photos")
+        n = 0
+        print("Press Enter to save a photo, type q then Enter to finish.")
+        while input(f"photo {n + 1}: ").strip().lower() != "q":
+            img = src.get()
+            if img is None:
+                print("No frame from the capture card.")
+                continue
+            path = os.path.normpath(os.path.join(out_dir, f"cal_{n:02d}.jpg"))
+            img.save(path)
+            print("saved", path)
+            n += 1
+        src.close()
     else:
         # Quick check: save one frame from the configured source.
         src = FrameSource()
