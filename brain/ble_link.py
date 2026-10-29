@@ -13,6 +13,7 @@ Test with the wheels off the ground:   python brain/ble_link.py
 Steering only (no throttle):           python brain/ble_link.py --steer
 On the floor, measure one turn:        python brain/ble_link.py --turn
 On the floor, measure one forward move: python brain/ble_link.py --forward
+Camera pan check:                      python brain/ble_link.py --pan
 List Bluetooth devices:                python brain/ble_link.py --scan
 Close the Jupyter controller first: the car accepts one Bluetooth connection at a time.
 """
@@ -26,6 +27,7 @@ import config
 import keys
 
 W, S, A, D = 1, 2, 4, 8
+CAM_UP, CAM_DOWN, CAM_LEFT, CAM_RIGHT = 16, 32, 64, 128
 CAM_CENTER, STEER_CENTER, ESTOP, UNLOCK = 1, 2, 4, 8
 
 
@@ -183,6 +185,24 @@ class BleCarLink:
             if not self.dry_run:
                 self._queue(STEER_CENTER)
 
+    def pan_camera(self, direction: str, seconds: float) -> None:
+        """Hold the camera pan servo left or right for `seconds` (the car itself doesn't move)."""
+        if self.dry_run:
+            print(f"   [car] camera {direction} for {seconds:.2f}s")
+            return
+        self._set(CAM_LEFT if direction == "left" else CAM_RIGHT)
+        time.sleep(seconds)
+        self._set(0)
+        time.sleep(0.4)  # let the picture settle
+
+    def center_camera(self) -> None:
+        """Back to the calibrated straight-ahead camera pose."""
+        if self.dry_run:
+            print("   [car] camera centre")
+            return
+        self._queue(CAM_CENTER)
+        time.sleep(0.5)
+
     def emergency_stop(self) -> None:
         if not self.dry_run:
             self._set(0)
@@ -225,6 +245,15 @@ if __name__ == "__main__":
                 print(f"turn {action} (TURN_SECONDS={config.TURN_SECONDS})")
                 car.do(action, 1.0)
                 time.sleep(1.5)
+        elif "--pan" in sys.argv:
+            # Camera only: look left, centre, look right, centre. Check how far it turns.
+            for side in ["left", "right"]:
+                print(f"camera {side} (PAN_SECONDS={config.PAN_SECONDS})")
+                car.pan_camera(side, config.PAN_SECONDS)
+                time.sleep(1.5)
+                print("camera centre")
+                car.center_camera()
+                time.sleep(1.0)
         elif "--forward" in sys.argv:
             # On the floor: one full-size forward move, to measure how far it goes.
             print(f"forward (FORWARD_SECONDS={config.FORWARD_SECONDS})")

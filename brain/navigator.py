@@ -61,6 +61,33 @@ def measure(d: dict) -> None:
         d["done"] = False
 
 
+def look_around(car, frames, target: str, goal: str, run_dir: str, step: int) -> str | None:
+    """Pan the camera left, then right, asking the eyes model each time. Returns the side where the
+    target was seen, or None. Always re-centres the camera (the distance calibration needs it)."""
+    prompt = prompts.with_target(
+        "Robot car camera at floor level, camera turned to one side. Is the search target in this image?\n"
+        'Reply with ONLY this JSON: {"person_visible": false, "observation": "max 8 words"}', target)
+    try:
+        for side in ("left", "right"):
+            car.pan_camera(side, config.PAN_SECONDS)
+            img = frames.get()
+            if img is None:
+                continue
+            img.save(os.path.join(run_dir, f"step_{step:03d}_look_{side}.jpg"))
+            text, secs = models.ask(config.EYES_MODEL, prompt, img, max_tokens=120)
+            r = models.parse_json(text) or {}
+            print(f"   [look {side}] {r.get('observation')} ({secs:.1f}s)")
+            car.center_camera()
+            if r.get("person_visible"):
+                return side
+        return None
+    except Exception as e:
+        print(f"   look-around failed: {e}")
+        return None
+    finally:
+        car.center_camera()
+
+
 def target_seen_recently(memory: list[str], n: int = 3) -> bool:
     """True if the target was in view in any of the last n steps (so the planner shouldn't send the car elsewhere)."""
     return any("[target in view]" in m for m in memory[-n:])
@@ -206,6 +233,16 @@ def _search(goal: str, source: str | None, target: str | None = None):
                 d["action"], d["amount"], d["override"] = "forward", 0.5, "target not close enough yet"
             else:
                 d["action"], d["amount"], d["override"] = "left", 1.0, "keep searching"
+
+        # Target not in view and the model wants to turn and scan: look with the camera first
+        # (the car stays still), and only turn the car towards the side where the target was seen.
+        if (config.CAM_SCAN and not d.get("person_visible") and d["action"] in ("left", "right")
+                and hasattr(car, "pan_camera") and not keys.stop_requested()):
+            seen = look_around(car, frames, target, goal, run_dir, step)
+            if seen:
+                d["action"], d["amount"], d["override"] = seen, 1.0, f"camera spotted target on the {seen}"
+            elif seen is None:
+                d["override"] = "camera look: not left or right either"
 
         # Steer to the target: the model says WHERE it is across the image (person_x, 0-1000),
         # our code picks the turn. Keeps the target in the middle of the view as the car closes in.

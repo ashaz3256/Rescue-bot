@@ -68,6 +68,8 @@ STUCK_DIFF = 3.0
 STOP_CM = float(_env("STOP_CM", "30"))     # measured obstacle closer than this = obstacle_close
 FOUND_CM = float(_env("FOUND_CM", "100"))  # measured person closer than this = done                       # mean pixel change below this after "forward" = stuck
 AIM_DEADBAND = float(_env("AIM_DEADBAND", "0.08"))  # target this far off centre (fraction of width) -> turn towards it
+CAM_SCAN = _env("CAM_SCAN", "1") == "1"  # target lost: look left/right with the camera before turning the car
+PAN_SECONDS = float(_env("PAN_SECONDS", "0.5"))  # how long to hold the camera pan for one look
 
 # One "move" at amount=1.0. Tune these on the real car.
 FORWARD_SECONDS = float(_env("FORWARD_SECONDS", "0.8"))
