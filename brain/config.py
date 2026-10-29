@@ -31,7 +31,14 @@ COMPARE_MODELS = list(dict.fromkeys(
                             "nvidia/Nemotron-3.5-Super-VL,google/gemma-3-27b-it,openbmb/MiniCPM-V-4_5").split(",")
     if m.strip()))
 
-# ---------- car link (see CLAUDE.md for the UDP contract) ----------
+# ---------- car link ----------
+# "ble" = our ESP32-S3 car over Bluetooth (brain/ble_link.py). "udp" = the Wi-Fi sketch in car/ (car_link.py).
+CAR_LINK = _env("CAR_LINK", "ble")
+BLE_NAME = _env("BLE_NAME", "ESP32_RC_CAR")
+BLE_RX_UUID = _env("BLE_RX_UUID", "6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
+BLE_SPEED = int(_env("BLE_SPEED", "1"))  # 1 = slowest; keep it low indoors
+
+# UDP link settings (only used when CAR_LINK=udp; see CLAUDE.md for that contract)
 CAR_IP = _env("CAR_IP", "192.168.1.60")  # printed on the ESP32 Serial Monitor at boot
 CMD_PORT = int(_env("CMD_PORT", "4210"))        # laptop -> ESP32
 TELEMETRY_PORT = int(_env("TELEMETRY_PORT", "4211"))  # ESP32 -> laptop

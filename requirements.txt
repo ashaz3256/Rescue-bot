@@ -3,3 +3,4 @@ opencv-python>=4.9
 pillow>=10.0
 python-dotenv>=1.0
 flask>=3.0
+bleak>=0.22

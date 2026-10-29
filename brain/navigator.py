@@ -22,6 +22,7 @@ import models
 import prompts
 import ranging
 from car_link import CarLink
+from ble_link import BleCarLink
 from video_in import FrameSource
 
 
@@ -85,13 +86,33 @@ class Pose:
 
 
 def run(goal: str, source: str | None, target: str | None = None) -> None:
+    """Run one search. Always leaves the car stopped, even on Ctrl+C or an error."""
+    car = None
+    try:
+        car = _search(goal, source, target)
+    except KeyboardInterrupt:
+        print("\nStopped by user.")
+    finally:
+        if _active_car is not None:
+            if hasattr(_active_car, "close"):
+                _active_car.close()
+            else:
+                _active_car.stop()
+
+
+_active_car = None
+
+
+def _search(goal: str, source: str | None, target: str | None = None):
     target = target or config.TARGET
     run_dir = os.path.join(config.RUNS_DIR, time.strftime("%Y%m%d-%H%M%S"))
     os.makedirs(run_dir, exist_ok=True)
     log_path = os.path.join(run_dir, "log.jsonl")
 
     frames = FrameSource(source)
-    car = CarLink()
+    global _active_car
+    car = BleCarLink() if config.CAR_LINK == "ble" else CarLink()
+    _active_car = car
     pose = Pose()
     memory: list[str] = []
     plan = "Scan the surroundings first."

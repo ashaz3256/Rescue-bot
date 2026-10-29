@@ -3,7 +3,7 @@
 (The same text lives in `.github/copilot-instructions.md`. Keep them in sync.)
 
 ## What this is
-Entry for the Nebius x NVIDIA Global AI Hackathon, Physical AI track. Deadline **Thu 30 Oct 2026, 10:00 PDT (18:00 UK)**.
+Entry for the Nebius x NVIDIA Global AI Hackathon, Physical AI track. Deadline **Fri 30 Oct 2026, 10:00 PDT (17:00 UK)**.
 A toy RC car searches a building with no map, finds a person, and reports where they are:
 a search-and-rescue scout that goes in before firefighters.
 
@@ -13,8 +13,9 @@ a search-and-rescue scout that goes in before firefighters.
 - Demo video ≤ 3 min with ≥ 1 min of the real car operating.
 
 ## Hardware
-- Toy RC car. ESP32 drives the steering servo and motor.
-- Manual control: Flysky transmitter → Flysky receiver → iBus → ESP32.
+- Toy RC car. ESP32-S3 drives the steering servo, motor and a camera pan/tilt servo.
+- Control: Bluetooth LE from the laptop (`brain/ble_link.py`, CAR_LINK=ble). Our own Jupyter controller does manual
+  driving over the same link; only one Bluetooth connection at a time.
 - Camera: Walksnail Avatar HD Pro on the car → Avatar VRX on the ground → HDMI → USB capture card → laptop (OpenCV).
 - The laptop runs all the AI. Nothing AI runs on the car.
 
@@ -49,7 +50,14 @@ Baselines for the model comparison only: `google/gemma-3-27b-it`, `openbmb/MiniC
   prompts get a header saying person_* fields refer to that object; JSON keys stay the same.
 - Always parse the LAST `{...}` in the reply (reasoning models think first). Never crash on bad JSON.
 
-## Laptop ↔ ESP32 contract (do not change without telling the whole team)
+## Bluetooth protocol (what the car firmware expects; do not change without telling the team)
+- 3-byte packet every 50 ms to RX characteristic 6E400002-B5A3-F393-E0A9-E50E24DCCA9E on device ESP32_RC_CAR:
+  [movement flags (w=1 s=2 a=4 d=8, camera up/down/left/right = 16/32/64/128), commands (1 centre camera,
+  2 centre steering, 4 emergency stop, 8 unlock motor), speed level 1–3].
+- Motor starts locked: send emergency stop, then unlock. Always send emergency stop on exit (ble_link.close).
+- Keep the camera centred: the distance calibration assumes a fixed camera pose.
+
+## Older Wi-Fi contract (car/ sketch, CAR_LINK=udp; not what the current car runs)
 - Laptop → ESP32: UDP port 4210, ASCII `S,<steer>,<throttle>\n`, floats -1.0..1.0, ~20 Hz.
 - ESP32 → laptop: UDP port 4211, ASCII `T,<steer>,<throttle>,<mode>\n`, mode = MANUAL | AUTO, 20 Hz.
   Telemetry always carries the stick values (used to record training data).

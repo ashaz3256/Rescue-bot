@@ -25,13 +25,12 @@ Walksnail camera (car) → Avatar VRX → HDMI → capture card → laptop
   Reflexes  our code               safety override, stuck detection, watchdog
                      │
                      ▼
-  laptop ──UDP──▶ ESP32 ──▶ steering servo + motor
-  Flysky transmitter ──iBus──▶ ESP32   (manual driving + instant override)
+  laptop ──Bluetooth LE──▶ ESP32-S3 ──▶ steering servo + motor (+ camera pan/tilt)
 ```
 
 - **No map.** The written log of what it saw and did *is* the map. The planner reads it to avoid going in circles.
 - **Stop-think-go.** The car is still while a model thinks, then makes a short move. It never drives blind.
-- **Safety first.** A transmitter switch flips between manual and autonomous at any moment, and the car stops by itself if the laptop goes quiet for 300 ms.
+- **Safety first.** The car starts with the motor locked, runs at its lowest speed, and the laptop sends an emergency stop whenever a run ends, errors or is cancelled with Ctrl+C.
 
 ## Hardware
 
@@ -71,10 +70,10 @@ DRY_RUN=0 CAR_IP=127.0.0.1 python brain/navigator.py --source test_photos   # te
 
 ### With the real car
 
-1. Flash `car/esp32_scout/` (see [car/README.md](car/README.md)) and put the printed IP in `.env` as `CAR_IP`.
-2. Plug the VRX into a USB HDMI capture card. `python brain/video_in.py --list` finds its camera number (put it in `.env` as `CAMERA_SOURCE`), and `python brain/video_in.py --show` opens a live window (S saves a frame to `test_photos/`). Turn the VRX on-screen display off.
-3. Bench test with the wheels off the ground (steps in `car/README.md`).
-4. Set `DRY_RUN=0`, flip the transmitter to AUTO, and run `python brain/navigator.py`.
+1. Turn the car on. Close our Jupyter controller if it's open (the car takes one Bluetooth connection at a time).
+2. Plug the VRX into a USB HDMI capture card. `python brain/video_in.py --list` finds its camera number (put it in `.env` as `CAMERA_SOURCE`), and `python brain/video_in.py --show` opens a live window. Turn the VRX on-screen display off.
+3. Bench test with the wheels off the ground: `python brain/ble_link.py` (forward, left, right, back, then stop).
+4. Set `DRY_RUN=0` in `.env` and run `python brain/navigator.py --target "..."`. Ctrl+C stops the car at any time.
 
 Every run is saved to `data/runs/<timestamp>/`: frames, `log.jsonl`, and `report.json` when someone is found.
 
