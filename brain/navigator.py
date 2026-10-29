@@ -199,6 +199,19 @@ def _search(goal: str, source: str | None, target: str | None = None):
             else:
                 d["action"], d["amount"], d["override"] = "left", 1.0, "keep searching"
 
+        # Steer to the target: the model says WHERE it is across the image (person_x, 0-1000),
+        # our code picks the turn. Keeps the target in the middle of the view as the car closes in.
+        x = ranging.to_fraction(d.get("person_x"))
+        if d.get("person_visible") and not d.get("done") and x is not None and d["action"] in ("forward", "left", "right"):
+            if x < 0.5 - config.AIM_DEADBAND:
+                want = "left"
+            elif x > 0.5 + config.AIM_DEADBAND:
+                want = "right"
+            else:
+                want = "forward"
+            if want != d["action"]:
+                d["action"], d["amount"], d["override"] = want, 0.5, f"steer to target (x={x:.2f})"
+
         # Safety override: never drive into something the model itself flagged.
         if d.get("obstacle_close") and d["action"] == "forward":
             d["action"], d["amount"], d["override"] = "back", 0.4, "obstacle close"

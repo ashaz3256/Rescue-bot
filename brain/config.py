@@ -67,6 +67,7 @@ PLAN_EVERY = 5
 STUCK_DIFF = 3.0
 STOP_CM = float(_env("STOP_CM", "30"))     # measured obstacle closer than this = obstacle_close
 FOUND_CM = float(_env("FOUND_CM", "100"))  # measured person closer than this = done                       # mean pixel change below this after "forward" = stuck
+AIM_DEADBAND = float(_env("AIM_DEADBAND", "0.12"))  # target this far off centre (fraction of width) -> turn towards it
 
 # One "move" at amount=1.0. Tune these on the real car.
 FORWARD_SECONDS = float(_env("FORWARD_SECONDS", "0.8"))

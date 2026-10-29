@@ -86,9 +86,11 @@ RECENT: {memory}
 Never choose forward if obstacle_close. If no person is visible, turn to scan, then head for doorways and open floor.
 Partly hidden shapes on the floor (legs, clothing) may be people. done=true only when a person is within 1 m.
 repeat = how many forward moves are safe in a row (1-3), only when the floor ahead is clearly open.
+If a person is visible, steer towards them: left if they are left of centre, right if right of centre.
+person_x = horizontal centre of the person, 0 = left edge of the image, 1000 = right edge.
 """ + FLOOR_ROWS + """
 Reply with ONLY this JSON, no other text:
-{{"action":"forward|left|right|back|stop","amount":0.2-1.0,"repeat":1,"obstacle_close":false,"ahead_floor_y":null,"person_visible":false,"person_bearing":null,"person_floor_y":null,"person_distance_m":null,"done":false,"observation":"max 8 words"}}"""
+{{"action":"forward|left|right|back|stop","amount":0.2-1.0,"repeat":1,"obstacle_close":false,"ahead_floor_y":null,"person_visible":false,"person_x":null,"person_floor_y":null,"person_distance_m":null,"done":false,"observation":"max 8 words"}}"""
 
 COMPARE_FAST = """Search-and-rescue robot camera at floor level.
 """ + CLOSE + """
