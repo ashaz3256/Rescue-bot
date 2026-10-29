@@ -251,7 +251,7 @@ def _search(goal: str, source: str | None, target: str | None = None):
         before = img
         for r in range(repeat):
             car.do(d["action"], amount)
-            pose.update(d["action"], amount)
+            pose.update(d["action"], getattr(car, "last_amount", amount))
             if r < repeat - 1:
                 after = frames.get()
                 if after is None or frame_diff(before, after) < config.STUCK_DIFF:

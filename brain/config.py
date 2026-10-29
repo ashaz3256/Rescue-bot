@@ -69,6 +69,7 @@ FOUND_CM = float(_env("FOUND_CM", "100"))  # measured person closer than this = 
 
 # One "move" at amount=1.0. Tune these on the real car.
 FORWARD_SECONDS = float(_env("FORWARD_SECONDS", "0.8"))
+MIN_MOVE_SECONDS = float(_env("MIN_MOVE_SECONDS", "0.45"))  # shorter bursts barely move the car
 TURN_SECONDS = float(_env("TURN_SECONDS", "0.6"))
 FORWARD_THROTTLE = 0.35
 TURN_THROTTLE = 0.30

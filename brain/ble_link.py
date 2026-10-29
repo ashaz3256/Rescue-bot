@@ -157,6 +157,11 @@ class BleCarLink:
 
     def do(self, action: str, amount: float = 0.5) -> None:
         amount = max(0.2, min(1.0, float(amount)))
+        # Very short bursts barely move this car (it needs time to get going), so never go below
+        # MIN_MOVE_SECONDS. last_amount is the amount actually used, for the position estimate.
+        base = config.TURN_SECONDS if action in ("left", "right") else config.FORWARD_SECONDS
+        amount = min(1.0, max(amount, config.MIN_MOVE_SECONDS / base)) if base > 0 else amount
+        self.last_amount = amount
         if action == "forward":
             self.drive(0.0, 1.0, config.FORWARD_SECONDS * amount)
         elif action == "back":
