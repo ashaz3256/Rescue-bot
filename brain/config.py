@@ -50,6 +50,7 @@ SEND_HZ = 20
 # An int = capture card / webcam index. A path = video file or folder of images (for testing).
 CAMERA_SOURCE = _env("CAMERA_SOURCE", "0")
 MAX_IMAGE_SIDE = int(_env("MAX_IMAGE_SIDE", "512"))  # smaller = faster
+MASK_OSD = _env("MASK_OSD", "1") == "1"  # black out the VRX on-screen text on live frames
 
 # What the scout searches for. "person" for real runs; any object for tests, e.g. "an antiperspirant can".
 TARGET = _env("TARGET", "person")

@@ -45,6 +45,13 @@ class FrameSource:
         ok, frame = self.cap.read()
         if not ok:
             return None
+        if config.MASK_OSD:
+            # Black out the Walksnail on-screen text (voltage/bitrate bar along the bottom, SD box top right)
+            # so the model doesn't read it as part of the floor. Rows stay where they were, so the
+            # distance calibration is unaffected.
+            h, w = frame.shape[:2]
+            frame[int(h * 0.92):, :] = 0
+            frame[: int(h * 0.20), int(w * 0.85):] = 0
         return Image.fromarray(self.cv2.cvtColor(frame, self.cv2.COLOR_BGR2RGB))
 
     def close(self) -> None:
