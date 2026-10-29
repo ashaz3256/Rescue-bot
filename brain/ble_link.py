@@ -73,11 +73,15 @@ class BleCarLink:
             if not self._connected.wait(25):
                 raise SystemExit(f"Could not connect to {config.BLE_NAME} over Bluetooth: {self._error or 'timeout'}. "
                                  "Is the car on, and the Jupyter controller disconnected?")
-            # Start safe: stopped, steering and camera centred, then unlock the motor.
+            # Start safe, exactly like the Jupyter controller: emergency stop on connect, centre things,
+            # then the unlock command ON ITS OWN in a separate packet (the firmware may ignore an unlock
+            # that arrives combined with other commands), then hold neutral so the ESC is ready.
             self._queue(ESTOP)
-            time.sleep(0.2)
-            self._queue(UNLOCK | STEER_CENTER | CAM_CENTER)
+            time.sleep(0.5)
+            self._queue(STEER_CENTER | CAM_CENTER)
             time.sleep(0.3)
+            self._queue(UNLOCK)
+            time.sleep(1.0)
             print(f"Connected to {config.BLE_NAME}, motor unlocked, camera centred")
 
     # ---------- Bluetooth loop (background thread) ----------
