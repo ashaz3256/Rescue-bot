@@ -61,6 +61,11 @@ def measure(d: dict) -> None:
         d["done"] = False
 
 
+def target_seen_recently(memory: list[str], n: int = 3) -> bool:
+    """True if the target was in view in any of the last n steps (so the planner shouldn't send the car elsewhere)."""
+    return any("[target in view]" in m for m in memory[-n:])
+
+
 class Pose:
     """Rough position from the entry, from the commands sent (swap in a gyro heading later)."""
 
@@ -161,7 +166,10 @@ def _search(goal: str, source: str | None, target: str | None = None):
 
         if step and step % config.PLAN_EVERY == 0:
             try:
-                plan, _ = models.ask(config.PLANNER_MODEL, prompts.PLANNER.format(log="\n".join(memory)),
+                planner_prompt = prompts.with_target(prompts.PLANNER.format(log="\n".join(memory)), target)
+                if target_seen_recently(memory):
+                    planner_prompt += "\nThe target is in view now: the plan is to drive straight to it."
+                plan, _ = models.ask(config.PLANNER_MODEL, planner_prompt,
                                      max_tokens=400, temperature=0.3)
                 plan = plan.strip()
                 print(f"   [plan] {plan}")
@@ -237,7 +245,8 @@ def _search(goal: str, source: str | None, target: str | None = None):
               f"{' | person ' + str(d['person_cm']) + 'cm' if d.get('person_cm') is not None else ''}"
               f"{' | OVERRIDE: ' + d['override'] if d.get('override') else ''}"
               f" | {d.get('reason', '')} ({secs:.1f}s)")
-        memory.append(f"step {step} ({pose.describe()}): saw {d.get('observation')}; did {d['action']}")
+        memory.append(f"step {step} ({pose.describe()}): saw {d.get('observation')}"
+                      f"{' [target in view]' if d.get('person_visible') else ''}; did {d['action']}")
         with open(log_path, "a") as f:
             f.write(json.dumps({"step": step, "time": time.time(), "frame": frame_file, "secs": round(secs, 2),
                                 "plan": plan, "pose": pose.as_dict(), "eyes": d, "check": check}) + "\n")
