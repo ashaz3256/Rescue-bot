@@ -95,6 +95,7 @@ DRY_RUN=0 CAR_IP=127.0.0.1 python brain/navigator.py --source test_photos   # te
 1. Turn the car on. Close our Jupyter controller if it's open (the car takes one Bluetooth connection at a time).
 2. Plug the VRX into a USB HDMI capture card. `python brain/video_in.py --list` finds its camera number (put it in `.env` as `CAMERA_SOURCE`), and `python brain/video_in.py --show` opens a live window. Turn the VRX on-screen display off.
 3. Bench test with the wheels off the ground: `python brain/ble_link.py` (forward, left, right, back, then stop).
+   Steering only, no throttle: `python brain/ble_link.py --steer`. On the floor, `--turn` and `--forward` do one full-size move so you can measure it and set `TURN_SECONDS` / `DEGREES_PER_TURN` / `FORWARD_SECONDS` / `METRES_PER_FORWARD` in `.env`.
 4. Set `DRY_RUN=0` in `.env` and run `python brain/navigator.py --target "..."`.
    While it runs (Windows terminal): **SPACE** stops and pauses the AI, **W/A/S/D** drive by hand while paused, **R** resumes, **Q** ends the run. Ctrl+C also stops the car.
 
