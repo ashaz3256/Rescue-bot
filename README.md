@@ -32,6 +32,28 @@ Walksnail camera (car) → Avatar VRX → HDMI → capture card → laptop
 - **Stop-think-go.** The car is still while a model thinks, then makes a short move. It never drives blind.
 - **Safety first.** The car starts with the motor locked, runs at its lowest speed, and the laptop sends an emergency stop whenever a run ends, errors or is cancelled with Ctrl+C.
 
+## How we use NVIDIA Nemotron and Nebius
+
+**NVIDIA open models (all served by Nebius Token Factory)**
+
+| Model | Role | Why this one |
+|---|---|---|
+| `nvidia/Nemotron-3.5-Super-VL` | **Eyes**, every step: reads the camera frame and returns a JSON decision (target visible? where does it touch the floor? anything within 30 cm? which way to move?) | Best accuracy of the four vision models we tested, about 1 s per decision, on a public pay-per-use endpoint |
+| `nvidia/Nemotron-3.5-Super-VL` | **Check**, the first time the target is seen: physical reasoning about distance, whether the path is clear, whether it can drive over an obstacle | Same model, different prompt, so no extra latency to warm up |
+| `nvidia/Nemotron-3_5-Lightning` | **Planner**, every 5 steps: reads the robot's text log and decides where to search next | Short text-only task, so the fast model keeps the loop responsive |
+| `nvidia/Cosmos3-Super-Reasoner` | Benchmarked on a Token Factory **dedicated endpoint** | Tied on spotting, but less precise at locating objects (see results) |
+
+**Where Token Factory sped us up**
+- **OpenAI-compatible API:** the robot loop calls Nemotron with the standard `openai` Python package (`brain/models.py`). No GPUs to set up, no model serving to maintain, just a base URL and a key.
+- **One API, many models:** benchmarking Nemotron against Cosmos, Gemma 3 and MiniCPM-V was a matter of changing the model id (`brain/vision_test.py`). That's how we picked the right model with real numbers in an evening.
+- **Pay per token:** a full search costs about 1–2p, so we could test on Builder Program credits without worrying about cost.
+- **Dedicated endpoints** let us spin up Cosmos 3 Super Reasoner for an hour to compare it, then delete it.
+
+**How Nemotron is used well, not just called**
+- Strict JSON outputs with the action first, parsed defensively (`brain/prompts.py`, `brain/models.py`).
+- We ask Nemotron **where** things touch the floor (0–1000 image scale), not how far away they are, then turn that into centimetres with our own camera calibration (`brain/ranging.py`). Nemotron is precise at "where" (1.7% error) and unreliable at "how far".
+- Short prompts, 512 px images and reasoning switched off cut each decision from about 4 s to about 1 s.
+
 ## Hardware
 
 | Part | Approx. cost |
