@@ -18,6 +18,7 @@ import time
 from PIL import Image, ImageChops, ImageStat
 
 import config
+import keys
 import models
 import prompts
 import ranging
@@ -122,7 +123,25 @@ def _search(goal: str, source: str | None, target: str | None = None):
     checked_person = False
     print(f"Goal: {goal}\nTarget: {target}\nLogging to {run_dir}\n{'DRY RUN' if car.dry_run else 'LIVE CAR'}\n")
 
+    if keys.start():
+        print("Keys: SPACE = stop and pause | W/A/S/D = manual moves while paused | R = resume AI | Q = quit\n")
+
     for step in range(config.MAX_STEPS):
+        # Human takeover: SPACE pauses the AI, W/A/S/D drive by hand, R resumes, Q quits.
+        if keys.paused.is_set() and not keys.quit_requested.is_set():
+            car.stop()
+            print("   PAUSED: W/A/S/D to drive, R to resume the AI, Q to quit")
+            while keys.paused.is_set() and not keys.quit_requested.is_set():
+                k = keys.next_key()
+                if k and hasattr(car, "manual"):
+                    car.manual(k)
+            prev_img, last_action = None, ""  # the view changed by hand, so skip the stuck check
+            if not keys.quit_requested.is_set():
+                print("   AI resumed")
+        if keys.quit_requested.is_set():
+            print("Run ended by user (Q).")
+            break
+
         # Only move when the transmitter switch says AUTO. MANUAL always wins.
         while not car.auto:
             print("   waiting: car is in MANUAL or not connected")
@@ -221,6 +240,8 @@ def _search(goal: str, source: str | None, target: str | None = None):
 
         # On clearly open floor the model may ask for up to MAX_REPEAT forward moves per call.
         # Between extra moves we only do the cheap stuck check, no model call.
+        if keys.stop_requested():
+            continue  # paused while the model was thinking: don't act on that decision
         repeat = 1
         if d["action"] == "forward" and not d.get("obstacle_close"):
             try:

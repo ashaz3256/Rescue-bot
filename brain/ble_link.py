@@ -19,6 +19,7 @@ import threading
 import time
 
 import config
+import keys
 
 W, S, A, D = 1, 2, 4, 8
 CAM_CENTER, STEER_CENTER, ESTOP, UNLOCK = 1, 2, 4, 8
@@ -82,8 +83,9 @@ class BleCarLink:
             self._flags = flags
 
     # ---------- same interface as CarLink ----------
-    def drive(self, steer: float, throttle: float, seconds: float) -> None:
-        """Hold a direction for `seconds`, then stop. Steering is left/right/straight (the car is digital)."""
+    def drive(self, steer: float, throttle: float, seconds: float, manual: bool = False) -> None:
+        """Hold a direction for `seconds`, then stop. Steering is left/right/straight (the car is digital).
+        An AI move is cut short the moment SPACE (pause) or Q is pressed; manual moves are not."""
         flags = 0
         if throttle > 0.05:
             flags |= W
@@ -97,7 +99,11 @@ class BleCarLink:
             print(f"   [car] flags={flags:04b} for {seconds:.2f}s")
             return
         self._set(flags)
-        time.sleep(seconds)
+        end = time.time() + seconds
+        while time.time() < end:
+            if not manual and keys.stop_requested():
+                break
+            time.sleep(0.02)
         self.stop()
 
     def stop(self) -> None:
@@ -119,6 +125,14 @@ class BleCarLink:
         if not self.dry_run:
             self._queue(STEER_CENTER)
         time.sleep(0.3)  # let the car settle before the next frame
+
+    def manual(self, key: str) -> None:
+        """One short manual move for W/A/S/D while the AI is paused."""
+        moves = {"w": (0.0, 1.0), "s": (0.0, -1.0), "a": (-1.0, 1.0), "d": (1.0, 1.0)}
+        if key in moves:
+            self.drive(*moves[key], 0.35, manual=True)
+            if not self.dry_run:
+                self._queue(STEER_CENTER)
 
     def emergency_stop(self) -> None:
         if not self.dry_run:
