@@ -69,6 +69,7 @@ class BleCarLink:
         self._connected = threading.Event()
         self._running = True
         self._error = None
+        self._last_dir = 0
         if not self.dry_run:
             self._thread = threading.Thread(target=self._run, daemon=True)
             self._thread.start()
@@ -122,23 +123,33 @@ class BleCarLink:
 
     # ---------- same interface as CarLink ----------
     def drive(self, steer: float, throttle: float, seconds: float, manual: bool = False) -> None:
-        """Hold a direction for `seconds`, then stop. Steering is left/right/straight (the car is digital).
-        An AI move is cut short the moment SPACE (pause) or Q is pressed; manual moves are not."""
+        """Hold a direction for `seconds`, then stop. An AI move is cut short the moment SPACE (pause)
+        or Q is pressed; manual moves are not.
+
+        How the firmware behaves (car sketch): holding A/D moves the steering a little every 20 ms and it
+        STAYS there until a centre command; a change between forward and reverse needs the keys released
+        and ~0.7 s of neutral first. So turns pre-steer while stopped, and direction changes wait."""
         flags = 0
         if throttle > 0.05:
             flags |= W
         elif throttle < -0.05:
             flags |= S
-        if steer < -0.3:
-            flags |= A
-        elif steer > 0.3:
-            flags |= D
+        steer_bit = A if steer < -0.3 else D if steer > 0.3 else 0
         if self.dry_run:
-            print(f"   [car] flags={flags:04b} for {seconds:.2f}s")
+            print(f"   [car] flags={flags | steer_bit:04b} for {seconds:.2f}s")
             return
+        direction = flags & (W | S)
+        if direction and self._last_dir and direction != self._last_dir:
+            self._gear_change(direction)
+        if steer_bit and config.PRESTEER_SECONDS > 0:
+            # Turn the wheels first while stopped: sharper, repeatable turns with less forward roll.
+            self._set(steer_bit)
+            time.sleep(config.PRESTEER_SECONDS)
+        flags |= steer_bit
         self._set(flags)
-        # Steering trim: when driving straight, tap the steering the opposite way for a share of
-        # each 200 ms window, so a car that pulls to one side goes straight. STEER_TRIM < 0 = left.
+        if direction:
+            self._last_dir = direction
+        # Software trim (laptop side) for a car that pulls to one side. Better: STEER_TRIM in the sketch.
         trim = config.STEER_TRIM if flags in (W, S) else 0.0
         trim_bit = A if trim < 0 else D
         start = time.time()
@@ -151,6 +162,13 @@ class BleCarLink:
                 self._set(flags | trim_bit if phase < abs(trim) else flags)
             time.sleep(0.02)
         self.stop()
+
+    def _gear_change(self, direction: int) -> None:
+        """Forward <-> reverse: tap the new direction, release, wait out the firmware's neutral period."""
+        self._set(direction)
+        time.sleep(0.1)
+        self._set(0)
+        time.sleep(0.8)
 
     def stop(self) -> None:
         if not self.dry_run:
