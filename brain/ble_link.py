@@ -25,6 +25,34 @@ W, S, A, D = 1, 2, 4, 8
 CAM_CENTER, STEER_CENTER, ESTOP, UNLOCK = 1, 2, 4, 8
 
 
+UART_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"  # Nordic UART service the car firmware advertises
+
+
+async def find_car(BleakScanner):
+    """Find the car by address (BLE_ADDRESS), then by name, then by its UART service.
+    Windows often hides device names, so the service check is the reliable fallback."""
+    if config.BLE_ADDRESS:
+        return await BleakScanner.find_device_by_address(config.BLE_ADDRESS, timeout=15)
+    found = await BleakScanner.discover(timeout=10, return_adv=True)
+    for device, adv in found.values():
+        if (adv.local_name or device.name or "") == config.BLE_NAME:
+            return device
+    for device, adv in found.values():
+        if UART_SERVICE in [u.lower() for u in (adv.service_uuids or [])]:
+            print(f"Found the car by its service at {device.address}")
+            return device
+    return None
+
+
+async def _scan() -> None:
+    from bleak import BleakScanner
+    found = await BleakScanner.discover(timeout=10, return_adv=True)
+    for device, adv in sorted(found.values(), key=lambda x: -(x[1].rssi or -999)):
+        mark = "  <-- CAR?" if (adv.local_name == config.BLE_NAME or
+                               UART_SERVICE in [u.lower() for u in (adv.service_uuids or [])]) else ""
+        print(f"{device.address}  rssi {adv.rssi:>4}  name {adv.local_name or device.name}{mark}")
+
+
 class BleCarLink:
     def __init__(self, dry_run: bool | None = None):
         self.dry_run = config.DRY_RUN if dry_run is None else dry_run
@@ -57,7 +85,7 @@ class BleCarLink:
 
     async def _loop(self) -> None:
         from bleak import BleakClient, BleakScanner
-        device = await BleakScanner.find_device_by_name(config.BLE_NAME, timeout=15)
+        device = await find_car(BleakScanner)
         if device is None:
             self._error = "car not found"
             return
@@ -155,6 +183,10 @@ class BleCarLink:
 
 
 if __name__ == "__main__":
+    import sys
+    if "--scan" in sys.argv:  # list nearby Bluetooth devices, strongest signal first
+        asyncio.run(_scan())
+        raise SystemExit
     # Bench test: wheels off the ground. Ctrl+C stops the car.
     car = BleCarLink(dry_run=False)
     try:

@@ -35,6 +35,7 @@ COMPARE_MODELS = list(dict.fromkeys(
 # "ble" = our ESP32-S3 car over Bluetooth (brain/ble_link.py). "udp" = the Wi-Fi sketch in car/ (car_link.py).
 CAR_LINK = _env("CAR_LINK", "ble")
 BLE_NAME = _env("BLE_NAME", "ESP32_RC_CAR")
+BLE_ADDRESS = _env("BLE_ADDRESS", "")   # optional: the car's address from `python brain/ble_link.py --scan`
 BLE_RX_UUID = _env("BLE_RX_UUID", "6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
 BLE_SPEED = int(_env("BLE_SPEED", "1"))  # 1 = slowest; keep it low indoors
 
