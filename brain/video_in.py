@@ -106,7 +106,8 @@ if __name__ == "__main__":
         n = 0
         print("Press Enter to save a photo, type q then Enter to finish.")
         while input(f"photo {n + 1}: ").strip().lower() != "q":
-            img = src.get()
+            for _ in range(3):  # flush old buffered frames so the photo is from now
+                img = src.get()
             if img is None:
                 print("No frame from the capture card.")
                 continue
