@@ -10,6 +10,10 @@ Same interface as car_link.CarLink (do / drive / stop / auto / connected / dry_r
 so navigator.py doesn't care which link is used.
 
 Test with the wheels off the ground:   python brain/ble_link.py
+Steering only (no throttle):           python brain/ble_link.py --steer
+On the floor, measure one turn:        python brain/ble_link.py --turn
+On the floor, measure one forward move: python brain/ble_link.py --forward
+List Bluetooth devices:                python brain/ble_link.py --scan
 Close the Jupyter controller first: the car accepts one Bluetooth connection at a time.
 """
 from __future__ import annotations
@@ -187,13 +191,33 @@ if __name__ == "__main__":
     if "--scan" in sys.argv:  # list nearby Bluetooth devices, strongest signal first
         asyncio.run(_scan())
         raise SystemExit
-    # Bench test: wheels off the ground. Ctrl+C stops the car.
     car = BleCarLink(dry_run=False)
     try:
-        for action in ["forward", "left", "right", "back"]:
-            print(action)
-            car.do(action, 0.6)
-            time.sleep(0.7)
+        if "--steer" in sys.argv:
+            # Steering only, no throttle: the front wheels should turn left, centre, right, centre.
+            for name, flags in [("left", A), ("centre", 0), ("right", D), ("centre", 0)]:
+                print("steer", name)
+                car._set(flags)
+                if flags == 0:
+                    car._queue(STEER_CENTER)
+                time.sleep(1.2)
+            car._set(0)
+        elif "--turn" in sys.argv:
+            # On the floor: one full-size turn each way, to measure how many degrees a turn is.
+            for action in ["left", "right"]:
+                print(f"turn {action} (TURN_SECONDS={config.TURN_SECONDS})")
+                car.do(action, 1.0)
+                time.sleep(1.5)
+        elif "--forward" in sys.argv:
+            # On the floor: one full-size forward move, to measure how far it goes.
+            print(f"forward (FORWARD_SECONDS={config.FORWARD_SECONDS})")
+            car.do("forward", 1.0)
+        else:
+            # Bench test: wheels off the ground.
+            for action in ["forward", "left", "right", "back"]:
+                print(action)
+                car.do(action, 0.6)
+                time.sleep(0.7)
     except KeyboardInterrupt:
         pass
     finally:
