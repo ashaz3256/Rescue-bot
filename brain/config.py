@@ -66,11 +66,11 @@ STOP_CM = float(_env("STOP_CM", "30"))     # measured obstacle closer than this 
 FOUND_CM = float(_env("FOUND_CM", "100"))  # measured person closer than this = done                       # mean pixel change below this after "forward" = stuck
 
 # One "move" at amount=1.0. Tune these on the real car.
-FORWARD_SECONDS = 0.8
-TURN_SECONDS = 0.6
+FORWARD_SECONDS = float(_env("FORWARD_SECONDS", "0.8"))
+TURN_SECONDS = float(_env("TURN_SECONDS", "0.6"))
 FORWARD_THROTTLE = 0.35
 TURN_THROTTLE = 0.30
-METRES_PER_FORWARD = 0.30              # used for dead reckoning
-DEGREES_PER_TURN = 45.0
+METRES_PER_FORWARD = float(_env("METRES_PER_FORWARD", "0.30"))              # used for dead reckoning
+DEGREES_PER_TURN = float(_env("DEGREES_PER_TURN", "45"))
 
 RUNS_DIR = _env("RUNS_DIR", os.path.join(os.path.dirname(__file__), "..", "data", "runs"))
