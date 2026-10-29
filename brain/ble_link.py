@@ -135,10 +135,18 @@ class BleCarLink:
             print(f"   [car] flags={flags:04b} for {seconds:.2f}s")
             return
         self._set(flags)
-        end = time.time() + seconds
+        # Steering trim: when driving straight, tap the steering the opposite way for a share of
+        # each 200 ms window, so a car that pulls to one side goes straight. STEER_TRIM < 0 = left.
+        trim = config.STEER_TRIM if flags in (W, S) else 0.0
+        trim_bit = A if trim < 0 else D
+        start = time.time()
+        end = start + seconds
         while time.time() < end:
             if not manual and keys.stop_requested():
                 break
+            if trim:
+                phase = ((time.time() - start) % 0.2) / 0.2
+                self._set(flags | trim_bit if phase < abs(trim) else flags)
             time.sleep(0.02)
         self.stop()
 
