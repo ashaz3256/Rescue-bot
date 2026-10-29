@@ -55,8 +55,10 @@ def measure(d: dict) -> None:
         d["obstacle_close"] = d["ahead_cm"] < config.STOP_CM
     if d.get("person_cm") is not None and d.get("person_visible"):
         d["person_distance_m"] = round(d["person_cm"] / 100, 2)
-        if d["person_cm"] <= config.FOUND_CM:
-            d["done"] = True
+        # The measurement decides "found", both ways: the model often says done as soon as it sees the target.
+        d["done"] = d["person_cm"] <= config.FOUND_CM
+    elif not d.get("person_visible"):
+        d["done"] = False
 
 
 class Pose:
