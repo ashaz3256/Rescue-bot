@@ -53,6 +53,10 @@ def measure(d: dict) -> None:
         d[out] = None if cm is None else round(cm)
     if d.get("ahead_cm") is not None:
         d["obstacle_close"] = d["ahead_cm"] < config.STOP_CM
+        # The thing just ahead is often the target itself: that's where we want to go, not an obstacle.
+        if (d.get("person_visible") and d.get("person_cm") is not None
+                and abs(d["ahead_cm"] - d["person_cm"]) < 20):
+            d["obstacle_close"] = False
     if d.get("person_cm") is not None and d.get("person_visible"):
         d["person_distance_m"] = round(d["person_cm"] / 100, 2)
         # The measurement decides "found", both ways: the model often says done as soon as it sees the target.
@@ -283,6 +287,10 @@ def _search(goal: str, source: str | None, target: str | None = None):
             except Exception as e:
                 print(f"   check model failed: {e}")
 
+        # Final approach: once the target is close, only creep forward (the shortest move).
+        if (d["action"] == "forward" and d.get("person_cm") is not None
+                and d["person_cm"] < config.FOUND_CM + 50):
+            d["amount"], d["repeat"] = 0.2, 1
         amount = float(d.get("amount") or 0.5)
         print(f"{step:02d} | {d.get('observation')} -> {d['action']} {amount:.1f}"
               f"{' x' + str(d.get('repeat')) if d.get('repeat') and d['action'] == 'forward' else ''}"
