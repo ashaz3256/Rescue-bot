@@ -191,6 +191,14 @@ def _search(goal: str, source: str | None, target: str | None = None):
         # Measured distances: the model says WHERE things touch the floor, the calibration says HOW FAR.
         measure(d)
 
+        # The model sometimes says "stop" as soon as it thinks it's close. Only the measurement ends a search:
+        # target visible but not close enough -> keep going; nothing visible -> turn and keep looking.
+        if d["action"] == "stop" and not d.get("done"):
+            if d.get("person_visible"):
+                d["action"], d["amount"], d["override"] = "forward", 0.5, "target not close enough yet"
+            else:
+                d["action"], d["amount"], d["override"] = "left", 1.0, "keep searching"
+
         # Safety override: never drive into something the model itself flagged.
         if d.get("obstacle_close") and d["action"] == "forward":
             d["action"], d["amount"], d["override"] = "back", 0.4, "obstacle close"
@@ -214,6 +222,7 @@ def _search(goal: str, source: str | None, target: str | None = None):
               f"{' x' + str(d.get('repeat')) if d.get('repeat') and d['action'] == 'forward' else ''}"
               f"{' | ahead ' + str(d['ahead_cm']) + 'cm' if d.get('ahead_cm') is not None else ''}"
               f"{' | person ' + str(d['person_cm']) + 'cm' if d.get('person_cm') is not None else ''}"
+              f"{' | OVERRIDE: ' + d['override'] if d.get('override') else ''}"
               f" | {d.get('reason', '')} ({secs:.1f}s)")
         memory.append(f"step {step} ({pose.describe()}): saw {d.get('observation')}; did {d['action']}")
         with open(log_path, "a") as f:
