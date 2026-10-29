@@ -220,6 +220,10 @@ def _search(goal: str, source: str | None, target: str | None = None):
             if want != "forward":
                 # Turn harder the further off-centre the target is (full turn near the edge of the view).
                 amount = min(1.0, 0.4 + 2.0 * abs(x - 0.5))
+                # This car rolls forward while it turns, so near the target only make small turns
+                # (a full turn at ~1 m drove into the fox in testing).
+                if d.get("person_cm") is not None and d["person_cm"] < config.FOUND_CM + 60:
+                    amount = min(amount, 0.5)
                 d["action"], d["amount"], d["override"] = want, amount, f"steer to target (x={x:.2f})"
             elif d["action"] != "forward":
                 d["action"], d["amount"], d["override"] = "forward", 0.5, f"target ahead (x={x:.2f})"
