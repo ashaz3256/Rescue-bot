@@ -240,7 +240,7 @@ def _search(goal: str, source: str | None, target: str | None = None):
                 and hasattr(car, "pan_camera") and not keys.stop_requested()):
             seen = look_around(car, frames, target, goal, run_dir, step)
             if seen:
-                d["action"], d["amount"], d["override"] = seen, 1.0, f"camera spotted target on the {seen}"
+                d["action"], d["amount"], d["override"] = seen, 0.7, f"camera spotted target on the {seen}"
             elif seen is None:
                 d["override"] = "camera look: not left or right either"
 
