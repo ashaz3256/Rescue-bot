@@ -142,6 +142,8 @@ class BleCarLink:
         direction = flags & (W | S)
         if direction and self._last_dir and direction != self._last_dir:
             self._gear_change(direction)
+        if direction == S and self._last_dir != S:
+            self._arm_reverse()
         if steer_bit and config.PRESTEER_SECONDS > 0:
             # Turn the wheels first while stopped: sharper, repeatable turns with less forward roll.
             self._set(steer_bit)
@@ -178,6 +180,14 @@ class BleCarLink:
         self.drive(-fwd, -1.0, config.TURN_SECONDS)
         if not self.dry_run:
             self._queue(STEER_CENTER)
+        time.sleep(0.3)
+
+    def _arm_reverse(self) -> None:
+        """The car's speed controller treats the first reverse after driving forward as a BRAKE.
+        Like the transmitter: reverse (brake), back to neutral, then reverse again = real reverse."""
+        self._set(S)
+        time.sleep(0.2)
+        self._set(0)
         time.sleep(0.3)
 
     def _gear_change(self, direction: int) -> None:
