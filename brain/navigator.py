@@ -251,9 +251,14 @@ def _search(goal: str, source: str | None, target: str | None = None):
             break
 
         # Only move when the transmitter switch says AUTO. MANUAL always wins.
+        waited = 0
         while not car.auto:
-            print("   waiting: car is in MANUAL or not connected")
+            if waited % 10 == 0:
+                print("   waiting: car not connected (reconnecting)...")
             time.sleep(0.5)
+            waited += 1
+            if keys.quit_requested.is_set():
+                break
 
         img = frames.get()
         if img is None:

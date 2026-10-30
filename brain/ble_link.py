@@ -73,11 +73,14 @@ class BleCarLink:
         self._last_dir = 0
         self._last_send = 0.0
         self.gaps = 0
+        self.reconnects = 0
+        self._ever_connected = False
         self._speed = config.BLE_SPEED
         if not self.dry_run:
             self._thread = threading.Thread(target=self._run, daemon=True)
             self._thread.start()
             if not self._connected.wait(25):
+                self._running = False
                 raise SystemExit(f"Could not connect to {config.BLE_NAME} over Bluetooth: {self._error or 'timeout'}. "
                                  "Is the car on, and the Jupyter controller disconnected?")
             # Start safe, exactly like the Jupyter controller: emergency stop on connect, centre things,
@@ -93,10 +96,21 @@ class BleCarLink:
 
     # ---------- Bluetooth loop (background thread) ----------
     def _run(self) -> None:
-        try:
-            asyncio.run(self._loop())
-        except Exception as e:  # surface the reason to the main thread
-            self._error = e
+        """Bluetooth thread. If the link drops (car reset, Bluetooth glitch) it reconnects by itself."""
+        attempt = 0
+        while self._running:
+            try:
+                asyncio.run(self._loop())
+            except Exception as e:  # surface the reason to the main thread
+                self._error = e
+            was_connected = self._connected.is_set()
+            self._connected.clear()
+            if not self._running:
+                break
+            attempt += 1
+            if was_connected or attempt == 1:
+                print(f"   [bluetooth] connection to the car lost ({self._error or 'disconnected'}), reconnecting...")
+            time.sleep(1.0)
 
     async def _loop(self) -> None:
         from bleak import BleakClient, BleakScanner
@@ -105,6 +119,14 @@ class BleCarLink:
             self._error = "car not found"
             return
         async with BleakClient(device) as ble:
+            self._error = None
+            self._last_send = 0.0
+            if self.reconnects or self._ever_connected:
+                self.reconnects += 1
+                print("   [bluetooth] reconnected to the car")
+                with self._lock:   # after a reset the firmware is in emergency stop: centre and unlock
+                    self._commands |= STEER_CENTER | CAM_CENTER | UNLOCK
+            self._ever_connected = True
             self._connected.set()
             while self._running and ble.is_connected:
                 with self._lock:
@@ -120,7 +142,6 @@ class BleCarLink:
             if ble.is_connected:  # always leave the car stopped
                 await ble.write_gatt_char(config.BLE_RX_UUID, bytes([0, ESTOP, config.BLE_SPEED]), response=False)
                 await asyncio.sleep(0.1)
-        self._connected.clear()
 
     def _queue(self, cmd: int) -> None:
         with self._lock:
