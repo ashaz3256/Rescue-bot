@@ -173,6 +173,14 @@ def read_view(img, target: str) -> dict:
         return {}
 
 
+def names_target(r: dict, target: str) -> bool:
+    """The model sometimes describes the target ("orange fox toy") but leaves person_visible false."""
+    words = [w for w in target.lower().replace(",", " ").split()
+             if len(w) > 3 and w not in ("small", "large", "little", "orange", "toy", "object", "person")]
+    text = f"{r.get('what') or ''} {r.get('observation') or ''}".lower()
+    return bool(words) and any(w in text for w in words)
+
+
 def same_place(a, b) -> bool:
     """Do two camera views show the same part of the room? (Used to confirm a U-turn.)"""
     h = min(a.height, b.height)
@@ -181,8 +189,9 @@ def same_place(a, b) -> bool:
     pair = Image.new("RGB", (a.width + 12 + b.width, h), "white")
     pair.paste(a, (0, 0))
     pair.paste(b, (a.width + 12, 0))
-    prompt = ("Two photos from a robot camera, side by side. Do they show the SAME part of the same room "
-              "(same furniture, door, wall), even from a slightly different spot or angle?\n"
+    prompt = ("Two photos from a robot camera, side by side. Is the camera looking at the SAME part of the room "
+              "in both: the same specific objects in the same arrangement (not just the same room or similar "
+              "colours)? Say false if the main objects differ.\n"
               'Reply with ONLY this JSON: {"same": false, "shared": "max 6 words"}')
     try:
         text, _ = models.ask(config.EYES_MODEL, prompt, pair, max_tokens=60, image_side=config.SPOT_SIDE or None)
@@ -212,7 +221,9 @@ def survey(car, frames, target: str, run_dir: str) -> dict:
             x = ranging.to_fraction(r.get("exit_x"))
             if x is not None:
                 door = {"ref": crop_around(img, x), "view": name, "tag": tag, "what": r.get("what")}
-            if r.get("person_visible"):
+            if r.get("person_visible") or names_target(r, target):
+                if not r.get("person_visible"):
+                    print(f"   [survey] the description mentions the target: treating it as seen on the {name}")
                 return name
         return None
 
@@ -229,7 +240,9 @@ def survey(car, frames, target: str, run_dir: str) -> dict:
             break
         # U-turn confirmed when what's now on our left was on our right at the start (or the reverse).
         turned = False
-        if "left" in now and "right" in start and same_place(now["left"], start["right"]):
+        if "front" in now and "front" in start and same_place(now["front"], start["front"]):
+            print("   [survey] still facing the same way as the start: not turned round yet")
+        elif "left" in now and "right" in start and same_place(now["left"], start["right"]):
             turned = True
         elif "right" in now and "left" in start and same_place(now["right"], start["left"]):
             turned = True
