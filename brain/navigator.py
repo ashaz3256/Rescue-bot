@@ -86,14 +86,18 @@ def find_exit(img, goal: str) -> dict:
     prompt = (
         "Robot car camera at floor level, searching a building. GOAL: " + goal + "\n"
         "The target is not in this area. Where should the car drive to search somewhere new? "
-        "Prefer an OPEN doorway or a corridor leading out (a real opening you can see through, not an alcove "
-        "or a wall recess), otherwise the most open floor. exit_x = horizontal centre of it "
-        "(0 = left edge, 1000 = right edge), or null if there is no way out in view.\n"
-        'Reply with ONLY this JSON: {"exit_x": null, "is_doorway": false, "what": "max 4 words"}')
+        "Prefer an OPEN doorway or corridor leading OUT of this room: the door is swung open and you can see "
+        "floor or another space continuing through it. A CLOSED door (even with glass), an alcove, a wall "
+        "recess or a cupboard is NOT a way out. Otherwise the most open floor. exit_x = horizontal centre of it "
+        "(0 = left edge, 1000 = right edge), or null if there is no way out in view. beyond = what you can see "
+        "through it, or null.\n"
+        'Reply with ONLY this JSON: {"exit_x": null, "is_doorway": false, "beyond": null, "what": "max 4 words"}')
     try:
         text, _ = models.ask(config.EYES_MODEL, prompt, img, max_tokens=80, image_side=config.SPOT_SIDE or None)
         r = models.parse_json(text) or {}
-        print(f"   [way out] {r.get('what')} x={r.get('exit_x')}")
+        if r.get("is_doorway") and not is_way_out(r):
+            r["is_doorway"] = False  # a door it can't see through: probably closed
+        print(f"   [way out] {r.get('what')} x={r.get('exit_x')} beyond={r.get('beyond')}")
         return r
     except Exception as e:
         print(f"   way-out check failed: {e}")
@@ -136,10 +140,12 @@ def match_exit(img, ref) -> dict:
 SURVEY_PROMPT = (
     "Robot car camera at floor level. Look carefully, the target may be small and far away.\n"
     "person_visible / person_x: is the person in this image, and its horizontal centre "
-    "(0 = left edge, 1000 = right edge). exit_x: horizontal centre of an OPEN doorway or corridor you can "
-    "see through (not an alcove or wall recess), or null. landmarks: the 2-4 most recognisable things "
+    "(0 = left edge, 1000 = right edge). exit_x: horizontal centre of an OPEN doorway or corridor that "
+    "leads OUT of this room: the door is swung open and you can see floor or another space continuing "
+    "through it. A CLOSED door (even with glass), an alcove, a wall recess or a cupboard is NOT an exit. "
+    "beyond = what you can see through the opening, or null. landmarks: the 2-4 most recognisable things "
     "in view (e.g. 'brown door, desk, radiator').\n"
-    'Reply with ONLY this JSON: {"person_visible": false, "person_x": null, "exit_x": null, '
+    'Reply with ONLY this JSON: {"person_visible": false, "person_x": null, "exit_x": null, "beyond": null, '
     '"what": "max 4 words", "landmarks": "max 8 words"}')
 
 
@@ -171,6 +177,14 @@ def read_view(img, target: str) -> dict:
     except Exception as e:
         print(f"   view check failed: {e}")
         return {}
+
+
+def is_way_out(r: dict) -> bool:
+    """Only an opening the model can see THROUGH counts (stops closed doors and alcoves being chosen)."""
+    beyond = str(r.get("beyond") or "").strip().lower()
+    if not beyond or beyond in ("null", "none", "nothing", "wall", "unknown"):
+        return False
+    return not any(w in (str(r.get("what") or "") + " " + beyond).lower() for w in ("closed", "alcove", "recess", "cupboard"))
 
 
 def names_target(r: dict, target: str) -> bool:
@@ -219,7 +233,7 @@ def survey(car, frames, target: str, run_dir: str) -> dict:
                   f"{' | TARGET' if r.get('person_visible') else ''}"
                   f"{' | way out: ' + str(r.get('what')) if r.get('exit_x') is not None else ''}")
             x = ranging.to_fraction(r.get("exit_x"))
-            if x is not None:
+            if x is not None and is_way_out(r):
                 door = {"ref": crop_around(img, x), "view": name, "tag": tag, "what": r.get("what")}
             if r.get("person_visible") or names_target(r, target):
                 if not r.get("person_visible"):
