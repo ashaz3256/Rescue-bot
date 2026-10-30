@@ -30,6 +30,8 @@ Walksnail camera (car) → Avatar VRX → HDMI → capture card → laptop
 
 - **No map.** The written log of what it saw and did *is* the map. The planner reads it to avoid going in circles.
 - **Stop-think-go.** The car is still while a model thinks, then makes a short move. It never drives blind.
+- **The model says where, our code decides how far.** Nemotron reports where the target touches the floor and where it sits across the image (0-1000 scale). Our calibration turns that into centimetres, and our code steers towards it, creeps in on the final approach and stops at a set distance.
+- **Look before moving.** When the target isn't in view, the car stays still and pans its camera left and right; Nemotron checks each view. If it spots the target, the car does three-point turns (forward on one lock, reverse on the other) towards it until it's in the front view.
 - **Safety first.** The car starts with the motor locked, runs at its lowest speed, and the laptop sends an emergency stop whenever a run ends, errors or is cancelled with Ctrl+C.
 
 ## How we use NVIDIA Nemotron and Nebius
@@ -83,11 +85,11 @@ cp .env.example .env                                  # then add your NEBIUS_API
 3. **Dry run the brain on photos:** `python brain/navigator.py --source test_photos`
 4. **Watch it:** in a second terminal, `python dashboard/app.py`, then open http://localhost:5000
 
-### Test the car link without the car
+### Test the car link without the car (Wi-Fi fake car)
 
 ```bash
 python brain/fake_car.py                                         # terminal 1: pretends to be the ESP32
-DRY_RUN=0 CAR_IP=127.0.0.1 python brain/navigator.py --source test_photos   # terminal 2
+CAR_LINK=udp DRY_RUN=0 CAR_IP=127.0.0.1 python brain/navigator.py --source test_photos   # terminal 2
 ```
 
 ### With the real car
@@ -95,6 +97,8 @@ DRY_RUN=0 CAR_IP=127.0.0.1 python brain/navigator.py --source test_photos   # te
 1. Turn the car on. Close our Jupyter controller if it's open (the car takes one Bluetooth connection at a time).
 2. Plug the VRX into a USB HDMI capture card. `python brain/video_in.py --list` finds its camera number (put it in `.env` as `CAMERA_SOURCE`), and `python brain/video_in.py --show` opens a live window. Turn the VRX on-screen display off.
 3. Bench test with the wheels off the ground: `python brain/ble_link.py` (forward, left, right, back, then stop).
+   Floor tests to tune `.env`: `--forward` (distance of one move), `--turn` (angle of one turn), `--spin` (three-point search turn), `--pan` (camera look), `--steer` (servo only).
+   Calibrate distance for your camera mount: `python brain/video_in.py --snap` with the target at 30/50/80/120/200 cm, then `python brain/ranging.py <points.csv>`.
    Steering only, no throttle: `python brain/ble_link.py --steer`. On the floor, `--turn` and `--forward` do one full-size move so you can measure it and set `TURN_SECONDS` / `DEGREES_PER_TURN` / `FORWARD_SECONDS` / `METRES_PER_FORWARD` in `.env`.
 4. Set `DRY_RUN=0` in `.env` and run `python brain/navigator.py --target "..."`.
    While it runs (Windows terminal): **SPACE** stops and pauses the AI, **W/A/S/D** drive by hand while paused, **R** resumes, **Q** ends the run. Ctrl+C also stops the car.
@@ -120,12 +124,25 @@ Target for this round: a stand-in object (an orange spray can) in 13 photos, abs
 - In an earlier round with no target present, Gemma reported a person who wasn't there in 2 of 19 photos; Nemotron reported none.
 - Switching to a short prompt, 512 px images and no reasoning step cut Nemotron from about 4.0 s to about 1 s per decision.
 
+## Live results (real car, 29 Oct 2026)
+
+Target: a small orange toy fox on the floor, 1-2 m from the car, in a room the car had never seen. `FOUND_CM=50`.
+
+- **Target ahead or to the side:** found in **5 of 5** runs, 3-4 decisions each (about 10-15 s). One run touched the toy after a large turn close to it; turns near the target are now limited.
+- **Target behind the car:** found by panning the camera, then turning towards it (11 decisions).
+- **Distance calibration** (Walksnail camera on the car, fitted from 5 ruler photos): within 3 cm up to 1.2 m.
+- Each Nemotron decision: about 1-1.5 s on Token Factory.
+
+Every run is logged in `data/runs/<timestamp>/` (frames, camera looks, decisions, report).
+
 ## Limits (honest list)
 
 - A normal camera can't see through thick smoke. A real deployment needs a thermal camera.
 - Position comes from counting moves, so it drifts over long runs. A phone or IMU gyro would fix the heading.
 - It's a toy car: no stairs, no heat protection, indoor floors only.
 - Each decision waits on a cloud model call (about a second), so it moves in short bursts.
+- No rear camera: the reverse half of a three-point turn is blind (optional rear ultrasonic sensor in the firmware).
+- Tested in one room; corridors and multi-room search are next.
 
 ## Next steps
 
@@ -133,12 +150,16 @@ Target for this round: a stand-in object (an orange spray can) in 13 photos, abs
 - Cheaper build: ESP32-CAM streaming over Wi-Fi instead of the FPV kit.
 - A small steering network trained on our own driving (NVIDIA PilotNet style), on Nebius AI Cloud, for smoother movement between model calls.
 - Several scouts searching one building and sharing a map.
+- Continuous tracking between Nemotron calls (a fast on-laptop tracker steers every frame, Nemotron decides every second).
+- Ultrasonic side and rear sensors for corridors and tight turns.
 
 ## Repo layout
 
 ```
 brain/       laptop code: navigator, models, prompts, camera, car link, fake car, model comparison
-car/         ESP32 Arduino sketch + wiring notes
+car/         ESP32-S3 firmware the car runs (Bluetooth LE) + older Wi-Fi sketch
+tools/       manual Bluetooth controller (Jupyter)
+calibration/ camera distance calibration (ruler points + fitted camera.json)
 dashboard/   live view (Flask + one HTML page)
 docs/        tool feedback log
 test_photos/ photos for comparing models (kept out of git by default)

@@ -1,4 +1,25 @@
-# Car (ESP32)
+# Car (ESP32-S3)
+
+**`esp32_ble_car/esp32_ble_car.ino` is the firmware the car runs.** The laptop drives it over Bluetooth LE
+(`brain/ble_link.py`): a 3-byte packet every 50 ms (movement keys, commands, speed level 1-3).
+
+What the firmware does:
+- Steering and camera pan/tilt servos move smoothly while a key is held and stay where they are until a
+  centre command (the laptop pre-steers before a turn and re-centres after every move).
+- Motor starts locked; emergency stop on connect, then unlock. Stops if no packet arrives for 350 ms.
+- Forward <-> reverse needs a neutral pause (cheap ESC: forward, neutral, brake, neutral, reverse).
+- Optional rear ultrasonic sensor (HC-SR04, TRIG 15 / ECHO 16 via a divider): refuses to reverse into
+  anything closer than 20 cm. Without the sensor it reads "clear".
+- Tuning at the top of the sketch: `STEER_TRIM` (straight-ahead), `STEER_RANGE` (full lock),
+  `YAW_RANGE` (camera pan), `FORWARD_LOW/MED/HIGH` (speed levels).
+
+Pins: steering GPIO 4, camera pitch 5, camera yaw 6, ESC 7.
+
+`../tools/jupyter_controller.py` is our manual keyboard controller over the same Bluetooth link.
+
+---
+
+## Older Wi-Fi option (not what the car runs)
 
 `esp32_scout/esp32_scout.ino` is a reference sketch. If your existing iBus + servo code already works, copy in the UDP, mode switch and watchdog parts rather than starting again.
 
