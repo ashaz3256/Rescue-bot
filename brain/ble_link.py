@@ -175,13 +175,13 @@ class BleCarLink:
         Both halves rotate the car the same way, so it turns about twice as far with almost no travel."""
         fwd = -1.0 if direction == "left" else 1.0
         self.last_amount = 1.0
-        self.drive(fwd, 1.0, config.TURN_SECONDS)
+        self.drive(fwd, 1.0, config.SEARCH_TURN_SECONDS)
         if not self.dry_run:
             self._queue(STEER_CENTER)   # jump the steering back to centre before locking the other way
             time.sleep(0.35)
         if keys.stop_requested():
             return
-        self.drive(-fwd, -1.0, config.TURN_SECONDS)
+        self.drive(-fwd, -1.0, config.SEARCH_TURN_SECONDS)
         if not self.dry_run:
             self._queue(STEER_CENTER)
         time.sleep(0.3)

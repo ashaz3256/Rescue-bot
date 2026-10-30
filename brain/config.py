@@ -78,6 +78,7 @@ SPIN_SEARCH = _env("SPIN_SEARCH", "1") == "1"  # search turns are three-point tu
 FORWARD_SECONDS = float(_env("FORWARD_SECONDS", "0.8"))
 MIN_MOVE_SECONDS = float(_env("MIN_MOVE_SECONDS", "0.45"))  # shorter bursts barely move the car
 TURN_SECONDS = float(_env("TURN_SECONDS", "0.6"))
+SEARCH_TURN_SECONDS = float(_env("SEARCH_TURN_SECONDS", "1.0"))  # each half of a search three-point turn (bigger = turns further)
 PRESTEER_SECONDS = float(_env("PRESTEER_SECONDS", "0.6"))  # turn the wheels before driving a turn (0 = off)
 FORWARD_THROTTLE = 0.35
 TURN_THROTTLE = 0.30
