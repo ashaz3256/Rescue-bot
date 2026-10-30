@@ -236,10 +236,14 @@ def survey(car, frames, target: str, run_dir: str) -> dict:
             x = ranging.to_fraction(r.get("exit_x"))
             if x is not None and is_way_out(r):
                 door = {"ref": crop_around(img, x), "view": name, "tag": tag, "what": r.get("what")}
-            if r.get("person_visible") or names_target(r, target):
-                if not r.get("person_visible"):
-                    print(f"   [survey] the description mentions the target: treating it as seen on the {name}")
+            if r.get("person_visible"):
                 return name
+            if names_target(r, target):
+                # Mixed answer (describes the target but says not visible): double-check before acting on it.
+                spot = spot_target(img, target)
+                print(f"   [survey] double-check on the {name}: {spot.get('observation')} -> {bool(spot.get('person_visible'))}")
+                if spot.get("person_visible"):
+                    return name
         return None
 
     print("   [survey] looking around from the start")
