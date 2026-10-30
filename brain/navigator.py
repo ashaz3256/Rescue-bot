@@ -81,6 +81,25 @@ def spot_target(img, target: str) -> dict:
         return {}
 
 
+def find_exit(img, goal: str) -> dict:
+    """Ask where to go when the target isn't here: an open doorway, corridor or the most open floor."""
+    prompt = (
+        "Robot car camera at floor level, searching a building. GOAL: " + goal + "\n"
+        "The target is not in this area. Where should the car drive to search somewhere new? "
+        "Prefer an OPEN doorway or a corridor leading out (a real opening you can see through, not an alcove "
+        "or a wall recess), otherwise the most open floor. exit_x = horizontal centre of it "
+        "(0 = left edge, 1000 = right edge), or null if there is no way out in view.\n"
+        'Reply with ONLY this JSON: {"exit_x": null, "what": "max 4 words"}')
+    try:
+        text, _ = models.ask(config.EYES_MODEL, prompt, img, max_tokens=80, image_side=config.SPOT_SIDE or None)
+        r = models.parse_json(text) or {}
+        print(f"   [way out] {r.get('what')} x={r.get('exit_x')}")
+        return r
+    except Exception as e:
+        print(f"   way-out check failed: {e}")
+        return {}
+
+
 def look_around(car, frames, target: str, goal: str, run_dir: str, step: int) -> str | None:
     """Pan the camera left, then right, asking the eyes model each time. Returns the side where the
     target was seen, or None. Always re-centres the camera (the distance calibration needs it)."""
@@ -177,6 +196,7 @@ def _search(goal: str, source: str | None, target: str | None = None):
     last_action = ""
     checked_person = False
     search_side, search_turns = None, 0  # where the camera last saw the target
+    scan_turns, explore_steps = 0, 0  # scans with nothing found; steps heading for a doorway/open path
     print(f"Goal: {goal}\nTarget: {target}\nLogging to {run_dir}\n{'DRY RUN' if car.dry_run else 'LIVE CAR'}\n")
 
     if keys.start():
@@ -272,7 +292,22 @@ def _search(goal: str, source: str | None, target: str | None = None):
         #  2. Otherwise look left and right with the camera (car still) and turn towards where it was seen.
         #  3. Seen nowhere: full-lock turn the way the model chose, and look again next step.
         if d.get("person_visible"):
-            search_side, search_turns = None, 0
+            search_side, search_turns, scan_turns, explore_steps = None, 0, 0, 0
+        elif explore_steps > 0 or scan_turns >= config.SCANS_BEFORE_EXPLORE:
+            # Looked all round this spot and found nothing: head for a doorway or the most open path.
+            if explore_steps == 0:
+                explore_steps, scan_turns = config.EXPLORE_STEPS, 0
+            explore_steps -= 1
+            ex = find_exit(img, goal)
+            x = ranging.to_fraction(ex.get("exit_x"))
+            if x is None:
+                d["action"], d["amount"], d["override"] = "left", 1.0, "no way out seen, turning"
+                d["spin"] = config.SPIN_SEARCH
+            elif abs(x - 0.5) > config.AIM_DEADBAND:
+                d["action"] = "left" if x < 0.5 else "right"
+                d["amount"], d["override"] = 0.6, f"heading for {ex.get('what') or 'the open path'} (x={x:.2f})"
+            else:
+                d["action"], d["amount"], d["override"] = "forward", 1.0, f"through {ex.get('what') or 'the open path'}"
         elif search_side and search_turns < config.MAX_SEARCH_TURNS:
             search_turns += 1
             d["action"], d["amount"], d["override"] = (
@@ -288,7 +323,8 @@ def _search(goal: str, source: str | None, target: str | None = None):
                 d["action"], d["amount"], d["override"] = seen, 1.0, f"camera spotted target on the {seen}"
                 d["spin"] = config.SPIN_SEARCH
             elif d["action"] in ("left", "right"):
-                d["amount"], d["override"] = 1.0, "camera look: nothing, full turn to scan"
+                scan_turns += 1
+                d["amount"], d["override"] = 1.0, f"camera look: nothing, full turn to scan ({scan_turns})"
                 d["spin"] = config.SPIN_SEARCH
 
         # Steer to the target: the model says WHERE it is across the image (person_x, 0-1000),
@@ -386,6 +422,13 @@ def _search(goal: str, source: str | None, target: str | None = None):
                     d.get("ahead_cm") is not None and d["ahead_cm"] < config.STOP_CM + 30)
                 car.spin(d["action"], reverse_first=bool(close_ahead))
                 pose.update(d["action"], 2.0)
+                after = frames.get()
+                if after is not None and frame_diff(before, after) < config.STUCK_DIFF:
+                    # The turn didn't change the view: wedged against something. Straighten out and back off.
+                    print("   turn didn't move the view: backing off")
+                    warning = "WARNING: the last turn did not change the view; you were stuck and backed off."
+                    car.do("back", 1.0)
+                    scan_turns = max(scan_turns, config.SCANS_BEFORE_EXPLORE - 1)
             else:
                 car.do(d["action"], amount)
                 pose.update(d["action"], getattr(car, "last_amount", amount))
