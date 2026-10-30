@@ -131,6 +131,129 @@ def match_exit(img, ref) -> dict:
         return {}
 
 
+# ---------- start-of-run survey: full scan, door notes, U-turn checked by matching views ----------
+
+SURVEY_PROMPT = (
+    "Robot car camera at floor level. Look carefully, the target may be small and far away.\n"
+    "person_visible / person_x: is the person in this image, and its horizontal centre "
+    "(0 = left edge, 1000 = right edge). exit_x: horizontal centre of an OPEN doorway or corridor you can "
+    "see through (not an alcove or wall recess), or null. landmarks: the 2-4 most recognisable things "
+    "in view (e.g. 'brown door, desk, radiator').\n"
+    'Reply with ONLY this JSON: {"person_visible": false, "person_x": null, "exit_x": null, '
+    '"what": "max 4 words", "landmarks": "max 8 words"}')
+
+
+def capture_views(car, frames, run_dir: str, tag: str) -> dict:
+    """Front, then camera panned left and right (car still). Camera always re-centred."""
+    views = {}
+    img = frames.get()
+    if img is not None:
+        views["front"] = img
+    try:
+        for side in ("left", "right"):
+            car.pan_camera(side, config.PAN_SECONDS)
+            img = frames.get()
+            car.center_camera()
+            if img is not None:
+                views[side] = img
+    finally:
+        car.center_camera()
+    for name, img in views.items():
+        img.save(os.path.join(run_dir, f"survey_{tag}_{name}.jpg"))
+    return views
+
+
+def read_view(img, target: str) -> dict:
+    try:
+        text, _ = models.ask(config.EYES_MODEL, prompts.with_target(SURVEY_PROMPT, target), img,
+                             max_tokens=150, image_side=config.SPOT_SIDE or None)
+        return models.parse_json(text) or {}
+    except Exception as e:
+        print(f"   view check failed: {e}")
+        return {}
+
+
+def same_place(a, b) -> bool:
+    """Do two camera views show the same part of the room? (Used to confirm a U-turn.)"""
+    h = min(a.height, b.height)
+    a = a.resize((int(a.width * h / a.height), h))
+    b = b.resize((int(b.width * h / b.height), h))
+    pair = Image.new("RGB", (a.width + 12 + b.width, h), "white")
+    pair.paste(a, (0, 0))
+    pair.paste(b, (a.width + 12, 0))
+    prompt = ("Two photos from a robot camera, side by side. Do they show the SAME part of the same room "
+              "(same furniture, door, wall), even from a slightly different spot or angle?\n"
+              'Reply with ONLY this JSON: {"same": false, "shared": "max 6 words"}')
+    try:
+        text, _ = models.ask(config.EYES_MODEL, prompt, pair, max_tokens=60, image_side=config.SPOT_SIDE or None)
+        r = models.parse_json(text) or {}
+        print(f"   [match] same={r.get('same')} ({r.get('shared')})")
+        return bool(r.get("same"))
+    except Exception as e:
+        print(f"   match check failed: {e}")
+        return False
+
+
+def survey(car, frames, target: str, run_dir: str) -> dict:
+    """Look left/front/right from the start. If the target isn't there, spin until the side views match
+    the start's opposite side views (a confirmed U-turn = the whole room seen), checking for the target
+    after each spin. Returns {"found": side or "front"} or {"door": ref photo, "side": where it is now}."""
+    notes = {"start": {}, "spins": []}
+    found, door = None, None
+
+    def check(views: dict, tag: str) -> str | None:
+        nonlocal door
+        for name, img in views.items():
+            r = read_view(img, target)
+            notes.setdefault(tag, {})[name] = {k: r.get(k) for k in ("person_visible", "person_x", "exit_x", "what", "landmarks")}
+            print(f"   [survey {tag} {name}] {r.get('landmarks')}"
+                  f"{' | TARGET' if r.get('person_visible') else ''}"
+                  f"{' | way out: ' + str(r.get('what')) if r.get('exit_x') is not None else ''}")
+            x = ranging.to_fraction(r.get("exit_x"))
+            if x is not None:
+                door = {"ref": crop_around(img, x), "view": name, "tag": tag, "what": r.get("what")}
+            if r.get("person_visible"):
+                return name
+        return None
+
+    print("   [survey] looking around from the start")
+    start = capture_views(car, frames, run_dir, "start")
+    found = check(start, "start")
+    spins = 0
+    while not found and spins < config.MAX_UTURN_SPINS and not keys.stop_requested():
+        car.spin("left")
+        spins += 1
+        now = capture_views(car, frames, run_dir, f"spin{spins}")
+        found = check(now, f"spin{spins}")
+        if found:
+            break
+        # U-turn confirmed when what's now on our left was on our right at the start (or the reverse).
+        turned = False
+        if "left" in now and "right" in start and same_place(now["left"], start["right"]):
+            turned = True
+        elif "right" in now and "left" in start and same_place(now["right"], start["left"]):
+            turned = True
+        notes["spins"].append({"spin": spins, "u_turn_confirmed": turned})
+        if turned:
+            print(f"   [survey] U-turn confirmed after {spins} spin(s): whole room seen, no target")
+            break
+    with open(os.path.join(run_dir, "survey.json"), "w") as f:
+        json.dump(notes, f, indent=2)
+    if found:
+        return {"found": found}
+    if door:
+        # Where is the door now? Seen after the last spin: same side. Seen only at the start and we've
+        # turned round: sides swap (start-left is now on our right), start-front is now behind us.
+        side = door["view"]
+        if door["tag"] == "start" and spins:
+            side = {"left": "right", "right": "left", "front": "behind"}[side]
+        door["side"] = side
+        door["ref"].save(os.path.join(run_dir, "remembered_exit.jpg"))
+        print(f"   [survey] heading for the {door['what']} ({side})")
+        return {"door": door}
+    return {}
+
+
 def look_around(car, frames, target: str, goal: str, run_dir: str, step: int) -> str | None:
     """Pan the camera left, then right, asking the eyes model each time. Returns the side where the
     target was seen, or None. Always re-centres the camera (the distance calibration needs it)."""
@@ -233,6 +356,19 @@ def _search(goal: str, source: str | None, target: str | None = None):
 
     if keys.start():
         print("Keys: SPACE = stop and pause | W/A/S/D = manual moves while paused | R = resume AI | Q = quit\n")
+
+    door_hint = None  # which way the remembered door is: left / right / behind
+    if config.SURVEY and config.CAM_SCAN and hasattr(car, "pan_camera") and not car.dry_run:
+        result = survey(car, frames, target, run_dir)
+        if result.get("found") in ("left", "right"):
+            search_side, search_turns = result["found"], 1
+        elif result.get("door"):
+            exit_ref = result["door"]["ref"]
+            door_hint = result["door"]["side"]
+            explore_steps = config.EXPLORE_STEPS
+            memory.append(f"survey: target not in this room; way out = {result['door']['what']} ({door_hint})")
+        elif not result.get("found"):
+            scan_turns = config.SCANS_BEFORE_EXPLORE  # nothing at all: go and look for a way out
 
     for step in range(config.MAX_STEPS):
         # Human takeover: SPACE pauses the AI, W/A/S/D drive by hand, R resumes, Q quits.
@@ -341,7 +477,8 @@ def _search(goal: str, source: str | None, target: str | None = None):
             if x is not None:
                 explore_steps -= 1  # only count steps actually heading somewhere
             if x is None:
-                d["action"], d["amount"], d["override"] = "left", 1.0, "looking for the way out, turning"
+                turn = door_hint if door_hint in ("left", "right") else "left"
+                d["action"], d["amount"], d["override"] = turn, 1.0, f"turning {turn} towards the remembered way out"
                 d["spin"] = config.SPIN_SEARCH
             elif abs(x - 0.5) > config.AIM_DEADBAND:
                 d["action"] = "left" if x < 0.5 else "right"
