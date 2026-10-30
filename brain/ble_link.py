@@ -14,7 +14,7 @@ Steering only (no throttle):           python brain/ble_link.py --steer
 On the floor, measure one turn:        python brain/ble_link.py --turn
 On the floor, measure one forward move: python brain/ble_link.py --forward
 Camera pan check:                      python brain/ble_link.py --pan
-Three-point turn (search):             python brain/ble_link.py --spin
+Three-point turn (search):             python brain/ble_link.py --spin [right]
 List Bluetooth devices:                python brain/ble_link.py --scan
 Close the Jupyter controller first: the car accepts one Bluetooth connection at a time.
 """
@@ -306,11 +306,11 @@ if __name__ == "__main__":
                 car.center_camera()
                 time.sleep(1.0)
         elif "--spin" in sys.argv:
-            # On the floor: one three-point turn each way (what the search uses).
-            for side in ["left", "right"]:
-                print(f"spin {side}")
-                car.spin(side)
-                time.sleep(1.5)
+            # On the floor: ONE three-point turn (what the search uses): forward on one lock,
+            # then back on the other lock. Default left; add "right" for the other way.
+            side = "right" if "right" in sys.argv else "left"
+            print(f"spin {side}: forward with {side} lock, then back with the opposite lock")
+            car.spin(side)
         elif "--forward" in sys.argv:
             # On the floor: one full-size forward move, to measure how far it goes.
             print(f"forward (FORWARD_SECONDS={config.FORWARD_SECONDS})")
