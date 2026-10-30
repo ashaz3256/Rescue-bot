@@ -523,9 +523,13 @@ def _search(goal: str, source: str | None, target: str | None = None):
                 door_lost += 1
                 if last_door_cm is not None and last_door_cm < config.DOOR_THROUGH_CM + 40 and door_lost == 1:
                     passing_door = 2  # it was close and now it's out of view: we're at it, keep going through
+                    last_door_cm = None
                 if passing_door > 0:
                     d["action"], d["amount"], d["override"] = "forward", 1.0, "through the doorway"
                     passing_door -= 1
+                    if passing_door == 0:
+                        explore_steps, door_lost, scan_turns = 0, 0, 0  # through: search the new space
+                        memory.append(f"step {step}: went through the doorway into a new area")
                 else:
                     turn = door_hint if door_hint in ("left", "right") else "left"
                     d["action"], d["amount"], d["override"] = turn, 1.0, f"turning {turn} to find the way out"
