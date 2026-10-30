@@ -170,21 +170,22 @@ class BleCarLink:
             time.sleep(0.02)
         self.stop()
 
-    def spin(self, direction: str) -> None:
+    def spin(self, direction: str, reverse_first: bool = False) -> None:
         """Three-point turn: forward with full lock one way, then reverse with full lock the other way.
-        Both halves rotate the car the same way, so it turns about twice as far with almost no travel."""
-        fwd = -1.0 if direction == "left" else 1.0
+        Both halves rotate the car the same way, so it turns about twice as far with almost no travel.
+        reverse_first=True (something close ahead): back out first, then the forward half."""
+        lock = -1.0 if direction == "left" else 1.0
+        halves = [(lock, 1.0, 1.0), (-lock, -1.0, config.SPIN_REVERSE_SHARE)]
+        if reverse_first:
+            halves.reverse()
         self.last_amount = 1.0
-        self.drive(fwd, 1.0, config.SEARCH_TURN_SECONDS)
-        if not self.dry_run:
-            self._queue(STEER_CENTER)   # jump the steering back to centre before locking the other way
-            time.sleep(0.35)
-        if keys.stop_requested():
-            return
-        # Shorter reverse half: the car can't see behind it, so it ends up a little forward of where it began.
-        self.drive(-fwd, -1.0, config.SEARCH_TURN_SECONDS * config.SPIN_REVERSE_SHARE)
-        if not self.dry_run:
-            self._queue(STEER_CENTER)
+        for i, (steer, throttle, share) in enumerate(halves):
+            if i and (keys.stop_requested()):
+                return
+            self.drive(steer, throttle, config.SEARCH_TURN_SECONDS * share)
+            if not self.dry_run:
+                self._queue(STEER_CENTER)   # back to centre before locking the other way
+                time.sleep(0.35)
         time.sleep(0.3)
 
     def _arm_reverse(self) -> None:

@@ -380,7 +380,11 @@ def _search(goal: str, source: str | None, target: str | None = None):
         before = img
         for r in range(repeat):
             if d.get("spin") and d["action"] in ("left", "right") and hasattr(car, "spin"):
-                car.spin(d["action"])  # three-point turn: rotates about twice as far, almost on the spot
+                # Three-point turn. If anything is close ahead (or the model can't tell), back out first so
+                # the forward half can't hit it; the car's rear sensor guards the reverse half.
+                close_ahead = d.get("obstacle_close") or (
+                    d.get("ahead_cm") is not None and d["ahead_cm"] < config.STOP_CM + 30)
+                car.spin(d["action"], reverse_first=bool(close_ahead))
                 pose.update(d["action"], 2.0)
             else:
                 car.do(d["action"], amount)
