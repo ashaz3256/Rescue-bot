@@ -71,6 +71,8 @@ class BleCarLink:
         self._running = True
         self._error = None
         self._last_dir = 0
+        self._last_send = 0.0
+        self.gaps = 0
         self._speed = config.BLE_SPEED
         if not self.dry_run:
             self._thread = threading.Thread(target=self._run, daemon=True)
@@ -109,6 +111,11 @@ class BleCarLink:
                     packet = bytes([self._flags, self._commands, self._speed])
                     self._commands = 0
                 await ble.write_gatt_char(config.BLE_RX_UUID, packet, response=False)
+                now = time.time()
+                if self._last_send and now - self._last_send > 0.3:
+                    self.gaps += 1
+                    print(f"   [bluetooth] {now - self._last_send:.2f}s gap between packets (car may emergency-stop)")
+                self._last_send = now
                 await asyncio.sleep(0.05)
             if ble.is_connected:  # always leave the car stopped
                 await ble.write_gatt_char(config.BLE_RX_UUID, bytes([0, ESTOP, config.BLE_SPEED]), response=False)
@@ -141,6 +148,13 @@ class BleCarLink:
             print(f"   [car] flags={flags | steer_bit:04b} for {seconds:.2f}s")
             return
         direction = flags & (W | S)
+        if direction:
+            # The car's firmware goes into emergency stop if it ever misses packets for 350 ms (Windows
+            # Bluetooth hiccups), and stays there until an unlock. Re-unlock (keys released) before every
+            # drive so one hiccup can't silently freeze the motor for the rest of the run.
+            self._set(0)
+            self._queue(UNLOCK)
+            time.sleep(0.12)
         if direction and self._last_dir and direction != self._last_dir:
             self._gear_change(direction)
         if direction == S and self._last_dir != S:
