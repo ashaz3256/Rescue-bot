@@ -159,6 +159,7 @@ def _search(goal: str, source: str | None, target: str | None = None):
     prev_img: Image.Image | None = None
     last_action = ""
     checked_person = False
+    search_side, search_turns = None, 0  # where the camera last saw the target
     print(f"Goal: {goal}\nTarget: {target}\nLogging to {run_dir}\n{'DRY RUN' if car.dry_run else 'LIVE CAR'}\n")
 
     if keys.start():
@@ -238,15 +239,27 @@ def _search(goal: str, source: str | None, target: str | None = None):
             else:
                 d["action"], d["amount"], d["override"] = "left", 1.0, "keep searching"
 
-        # Target not in view and the model wants to turn and scan: look with the camera first
-        # (the car stays still), and only turn the car towards the side where the target was seen.
-        if (config.CAM_SCAN and not d.get("person_visible") and d["action"] in ("left", "right")
-                and hasattr(car, "pan_camera") and not keys.stop_requested()):
-            seen = look_around(car, frames, target, goal, run_dir, step)
+        # Target not in view: search.
+        #  1. If the camera already saw it on one side, keep turning that way (full lock, a U-turn if
+        #     needed) until the front view sees it again; no need to look around every step.
+        #  2. Otherwise look left and right with the camera (car still) and turn towards where it was seen.
+        #  3. Seen nowhere: full-lock turn the way the model chose, and look again next step.
+        if d.get("person_visible"):
+            search_side, search_turns = None, 0
+        elif search_side and search_turns < config.MAX_SEARCH_TURNS:
+            search_turns += 1
+            d["action"], d["amount"], d["override"] = (
+                search_side, 1.0, f"turning {search_side} to where the camera saw the target ({search_turns})")
+        elif d["action"] in ("left", "right", "forward", "back") and not keys.stop_requested():
+            search_side, search_turns = None, 0
+            seen = None
+            if config.CAM_SCAN and hasattr(car, "pan_camera"):
+                seen = look_around(car, frames, target, goal, run_dir, step)
             if seen:
-                d["action"], d["amount"], d["override"] = seen, 0.7, f"camera spotted target on the {seen}"
-            elif seen is None:
-                d["override"] = "camera look: not left or right either"
+                search_side, search_turns = seen, 1
+                d["action"], d["amount"], d["override"] = seen, 1.0, f"camera spotted target on the {seen}"
+            elif d["action"] in ("left", "right"):
+                d["amount"], d["override"] = 1.0, "camera look: nothing, full turn to scan"
 
         # Steer to the target: the model says WHERE it is across the image (person_x, 0-1000),
         # our code picks the turn. Keeps the target in the middle of the view as the car closes in.
