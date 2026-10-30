@@ -176,7 +176,7 @@ def read_view(img, target: str) -> dict:
 def names_target(r: dict, target: str) -> bool:
     """The model sometimes describes the target ("orange fox toy") but leaves person_visible false."""
     words = [w for w in target.lower().replace(",", " ").split()
-             if len(w) > 3 and w not in ("small", "large", "little", "orange", "toy", "object", "person")]
+             if len(w) >= 3 and w not in ("the", "and", "small", "large", "little", "orange", "toy", "object", "person")]
     text = f"{r.get('what') or ''} {r.get('observation') or ''}".lower()
     return bool(words) and any(w in text for w in words)
 
