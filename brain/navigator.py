@@ -65,6 +65,22 @@ def measure(d: dict) -> None:
         d["done"] = False
 
 
+def spot_target(img, target: str) -> dict:
+    """One focused question on a higher-resolution frame: is the target anywhere in view, and where?"""
+    prompt = prompts.with_target(
+        "Robot car camera at floor level. Look carefully, the target may be small and far away.\n"
+        "Is the person in this image? person_x = horizontal centre (0 = left edge, 1000 = right edge), "
+        "person_floor_y = where they touch the floor (0 = top, 1000 = bottom).\n"
+        'Reply with ONLY this JSON: {"person_visible": false, "person_x": null, "person_floor_y": null, '
+        '"observation": "max 8 words"}', target)
+    try:
+        text, _ = models.ask(config.EYES_MODEL, prompt, img, max_tokens=120, image_side=config.SPOT_SIDE)
+        return models.parse_json(text) or {}
+    except Exception as e:
+        print(f"   second look failed: {e}")
+        return {}
+
+
 def look_around(car, frames, target: str, goal: str, run_dir: str, step: int) -> str | None:
     """Pan the camera left, then right, asking the eyes model each time. Returns the side where the
     target was seen, or None. Always re-centres the camera (the distance calibration needs it)."""
@@ -78,7 +94,8 @@ def look_around(car, frames, target: str, goal: str, run_dir: str, step: int) ->
             if img is None:
                 continue
             img.save(os.path.join(run_dir, f"step_{step:03d}_look_{side}.jpg"))
-            text, secs = models.ask(config.EYES_MODEL, prompt, img, max_tokens=120)
+            text, secs = models.ask(config.EYES_MODEL, prompt, img, max_tokens=120,
+                                    image_side=config.SPOT_SIDE or None)
             r = models.parse_json(text) or {}
             print(f"   [look {side}] {r.get('observation')} ({secs:.1f}s)")
             car.center_camera()
@@ -229,6 +246,16 @@ def _search(goal: str, source: str | None, target: str | None = None):
             continue
 
         # Measured distances: the model says WHERE things touch the floor, the calibration says HOW FAR.
+        # Small or far targets are easy to miss at 512 px. If the eyes model didn't see one, ask again with
+        # a short yes/no question on a sharper image before deciding the target isn't there.
+        if not d.get("person_visible") and config.SPOT_SIDE > 0:
+            spot = spot_target(img, target)
+            if spot.get("person_visible"):
+                for k in ("person_visible", "person_x", "person_floor_y"):
+                    d[k] = spot.get(k)
+                d["observation"] = f"{d.get('observation')} | second look: {spot.get('observation')}"
+                print(f"   [second look] target found: {spot.get('observation')}")
+
         measure(d)
 
         # The model sometimes says "stop" as soon as it thinks it's close. Only the measurement ends a search:

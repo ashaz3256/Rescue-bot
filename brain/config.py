@@ -52,6 +52,7 @@ SEND_HZ = 20
 CAMERA_SOURCE = _env("CAMERA_SOURCE", "0")
 MAX_IMAGE_SIDE = int(_env("MAX_IMAGE_SIDE", "512"))  # smaller = faster
 MASK_OSD = _env("MASK_OSD", "1") == "1"  # black out the VRX on-screen text on live frames
+SPOT_SIDE = int(_env("SPOT_SIDE", "1024"))  # sharper second look when the target isn't seen (0 = off)
 
 # What the scout searches for. "person" for real runs; any object for tests, e.g. "an antiperspirant can".
 TARGET = _env("TARGET", "person")
