@@ -81,10 +81,16 @@ def spot_target(img, target: str) -> dict:
         return {}
 
 
+def door_note() -> str:
+    """Operator hint about the way out, e.g. 'the open brown door' (from --door or EXIT_HINT)."""
+    return (f"The operator says the way out of this room is {config.EXIT_HINT}. Look for exactly that. "
+            if config.EXIT_HINT else "")
+
+
 def find_exit(img, goal: str) -> dict:
     """Ask where to go when the target isn't here: an open doorway, corridor or the most open floor."""
     prompt = (
-        "Robot car camera at floor level, searching a building. GOAL: " + goal + "\n"
+        "Robot car camera at floor level, searching a building. GOAL: " + goal + "\n" + door_note() +
         "The target is not in this area. Where should the car drive to search somewhere new? "
         "Prefer an OPEN doorway or corridor leading OUT of this room: the door is swung open and you can see "
         "floor or another space continuing through it. A CLOSED door (even with glass), an alcove, a wall "
@@ -124,7 +130,7 @@ def match_exit(img, ref) -> dict:
     pair.paste(ref, (0, 0))
     pair.paste(img, (ref.width + 12, 0))
     prompt = (
-        "LEFT strip: a doorway the robot saw earlier. RIGHT: the robot's camera now. "
+        door_note() + "LEFT strip: a doorway the robot saw earlier. RIGHT: the robot's camera now. "
         "Is that same doorway visible in the RIGHT image? exit_x = its horizontal centre within the RIGHT "
         "image only (0 = left edge of the right image, 1000 = right edge), or null if not visible. Only say "
         "yes if it is the SAME open door: an arch, alcove or wall recess is not a doorway. exit_floor_y = where "
@@ -179,7 +185,7 @@ def capture_views(car, frames, run_dir: str, tag: str) -> dict:
 
 def read_view(img, target: str) -> dict:
     try:
-        text, _ = models.ask(config.EYES_MODEL, prompts.with_target(SURVEY_PROMPT, target), img,
+        text, _ = models.ask(config.EYES_MODEL, prompts.with_target(door_note() + SURVEY_PROMPT, target), img,
                              max_tokens=150, image_side=config.SPOT_SIDE or None)
         return models.parse_json(text) or {}
     except Exception as e:
@@ -703,8 +709,11 @@ if __name__ == "__main__":
     ap.add_argument("--goal", default="search for people and report where they are")
     ap.add_argument("--source", default=None, help="camera index, video file, or folder of images")
     ap.add_argument("--target", default=None, help='what to search for, e.g. "an antiperspirant can"')
+    ap.add_argument("--door", default=None, help='the way out to use if the target is not in the room, e.g. "the open brown door"')
     args = ap.parse_args()
     goal = args.goal
     if args.target and goal == ap.get_default("goal"):
         goal = f"find {args.target} and stop next to it"
+    if args.door:
+        config.EXIT_HINT = args.door
     run(goal, args.source, args.target)
