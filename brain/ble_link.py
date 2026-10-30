@@ -71,6 +71,7 @@ class BleCarLink:
         self._running = True
         self._error = None
         self._last_dir = 0
+        self._speed = config.BLE_SPEED
         if not self.dry_run:
             self._thread = threading.Thread(target=self._run, daemon=True)
             self._thread.start()
@@ -105,7 +106,7 @@ class BleCarLink:
             self._connected.set()
             while self._running and ble.is_connected:
                 with self._lock:
-                    packet = bytes([self._flags, self._commands, config.BLE_SPEED])
+                    packet = bytes([self._flags, self._commands, self._speed])
                     self._commands = 0
                 await ble.write_gatt_char(config.BLE_RX_UUID, packet, response=False)
                 await asyncio.sleep(0.05)
@@ -149,6 +150,9 @@ class BleCarLink:
             self._set(steer_bit)
             time.sleep(config.PRESTEER_SECONDS)
         flags |= steer_bit
+        # Turning on full lock needs more power than driving straight (the tyres scrub/slide),
+        # so turns use TURN_SPEED. Reversing uses the car's own reverse speed either way.
+        self._speed = config.TURN_SPEED if steer_bit else config.BLE_SPEED
         self._set(flags)
         if direction:
             self._last_dir = direction
@@ -200,6 +204,7 @@ class BleCarLink:
     def stop(self) -> None:
         if not self.dry_run:
             self._set(0)
+            self._speed = config.BLE_SPEED
             time.sleep(0.1)
 
     def do(self, action: str, amount: float = 0.5) -> None:

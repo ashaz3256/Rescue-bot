@@ -38,6 +38,7 @@ BLE_NAME = _env("BLE_NAME", "ESP32_RC_CAR")
 BLE_ADDRESS = _env("BLE_ADDRESS", "")   # optional: the car's address from `python brain/ble_link.py --scan`
 BLE_RX_UUID = _env("BLE_RX_UUID", "6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
 BLE_SPEED = int(_env("BLE_SPEED", "1"))  # 1 = slowest; keep it low indoors
+TURN_SPEED = int(_env("TURN_SPEED", _env("BLE_SPEED", "1")))  # speed level for turns (try 2 if turns stall)
 STEER_TRIM = max(-1.0, min(1.0, float(_env("STEER_TRIM", "0"))))  # car pulls right? try -0.2 (left taps)
 
 # UDP link settings (only used when CAR_LINK=udp; see CLAUDE.md for that contract)
