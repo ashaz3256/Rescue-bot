@@ -89,7 +89,7 @@ def find_exit(img, goal: str) -> dict:
         "Prefer an OPEN doorway or a corridor leading out (a real opening you can see through, not an alcove "
         "or a wall recess), otherwise the most open floor. exit_x = horizontal centre of it "
         "(0 = left edge, 1000 = right edge), or null if there is no way out in view.\n"
-        'Reply with ONLY this JSON: {"exit_x": null, "what": "max 4 words"}')
+        'Reply with ONLY this JSON: {"exit_x": null, "is_doorway": false, "what": "max 4 words"}')
     try:
         text, _ = models.ask(config.EYES_MODEL, prompt, img, max_tokens=80, image_side=config.SPOT_SIDE or None)
         r = models.parse_json(text) or {}
@@ -97,6 +97,37 @@ def find_exit(img, goal: str) -> dict:
         return r
     except Exception as e:
         print(f"   way-out check failed: {e}")
+        return {}
+
+
+def crop_around(img, x: float) -> "Image.Image":
+    """The part of the frame around horizontal position x (fraction), to remember a doorway by."""
+    w, h = img.size
+    half = int(w * 0.22)
+    cx = int(x * w)
+    left = max(0, min(w - 2 * half, cx - half))
+    return img.crop((left, 0, left + 2 * half, h)).copy()
+
+
+def match_exit(img, ref) -> dict:
+    """Show the remembered doorway (left) next to the live view (right): is it in view, and where?"""
+    w, h = img.size
+    ref = ref.resize((int(ref.width * h / ref.height), h))
+    pair = Image.new("RGB", (ref.width + 12 + w, h), "white")
+    pair.paste(ref, (0, 0))
+    pair.paste(img, (ref.width + 12, 0))
+    prompt = (
+        "LEFT strip: a doorway the robot saw earlier. RIGHT: the robot's camera now. "
+        "Is that same doorway visible in the RIGHT image? exit_x = its horizontal centre within the RIGHT "
+        "image only (0 = left edge of the right image, 1000 = right edge), or null if not visible.\n"
+        'Reply with ONLY this JSON: {"exit_x": null, "what": "max 4 words"}')
+    try:
+        text, _ = models.ask(config.EYES_MODEL, prompt, pair, max_tokens=80, image_side=config.SPOT_SIDE or None)
+        r = models.parse_json(text) or {}
+        print(f"   [remembered way out] {r.get('what')} x={r.get('exit_x')}")
+        return r
+    except Exception as e:
+        print(f"   remembered-exit check failed: {e}")
         return {}
 
 
@@ -197,6 +228,7 @@ def _search(goal: str, source: str | None, target: str | None = None):
     checked_person = False
     search_side, search_turns = None, 0  # where the camera last saw the target
     scan_turns, explore_steps = 0, 0  # scans with nothing found; steps heading for a doorway/open path
+    exit_ref = None  # photo of the best doorway/way out seen so far (visual memory)
     print(f"Goal: {goal}\nTarget: {target}\nLogging to {run_dir}\n{'DRY RUN' if car.dry_run else 'LIVE CAR'}\n")
 
     if keys.start():
@@ -297,11 +329,14 @@ def _search(goal: str, source: str | None, target: str | None = None):
             # Looked all round this spot and found nothing: head for a doorway or the most open path.
             if explore_steps == 0:
                 explore_steps, scan_turns = config.EXPLORE_STEPS, 0
-            explore_steps -= 1
-            ex = find_exit(img, goal)
+            ex = match_exit(img, exit_ref) if exit_ref is not None else {}
+            if ranging.to_fraction(ex.get("exit_x")) is None:
+                ex = find_exit(img, goal)
             x = ranging.to_fraction(ex.get("exit_x"))
+            if x is not None:
+                explore_steps -= 1  # only count steps actually heading somewhere
             if x is None:
-                d["action"], d["amount"], d["override"] = "left", 1.0, "no way out seen, turning"
+                d["action"], d["amount"], d["override"] = "left", 1.0, "looking for the way out, turning"
                 d["spin"] = config.SPIN_SEARCH
             elif abs(x - 0.5) > config.AIM_DEADBAND:
                 d["action"] = "left" if x < 0.5 else "right"
@@ -326,6 +361,14 @@ def _search(goal: str, source: str | None, target: str | None = None):
                 scan_turns += 1
                 d["amount"], d["override"] = 1.0, f"camera look: nothing, full turn to scan ({scan_turns})"
                 d["spin"] = config.SPIN_SEARCH
+                # Visual memory: while scanning, remember what the way out looks like.
+                ex = find_exit(img, goal)
+                x = ranging.to_fraction(ex.get("exit_x"))
+                if x is not None and ex.get("is_doorway"):
+                    exit_ref = crop_around(img, x)
+                    exit_ref.save(os.path.join(run_dir, "remembered_exit.jpg"))
+                    memory.append(f"step {step}: remembered a way out ({ex.get('what')})")
+                    print(f"   [memory] remembered the way out: {ex.get('what')}")
 
         # Steer to the target: the model says WHERE it is across the image (person_x, 0-1000),
         # our code picks the turn. Keeps the target in the middle of the view as the car closes in.
