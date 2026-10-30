@@ -181,7 +181,8 @@ class BleCarLink:
             time.sleep(0.35)
         if keys.stop_requested():
             return
-        self.drive(-fwd, -1.0, config.SEARCH_TURN_SECONDS)
+        # Shorter reverse half: the car can't see behind it, so it ends up a little forward of where it began.
+        self.drive(-fwd, -1.0, config.SEARCH_TURN_SECONDS * config.SPIN_REVERSE_SHARE)
         if not self.dry_run:
             self._queue(STEER_CENTER)
         time.sleep(0.3)
