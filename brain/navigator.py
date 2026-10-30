@@ -90,8 +90,10 @@ def find_exit(img, goal: str) -> dict:
         "floor or another space continuing through it. A CLOSED door (even with glass), an alcove, a wall "
         "recess or a cupboard is NOT a way out. Otherwise the most open floor. exit_x = horizontal centre of it "
         "(0 = left edge, 1000 = right edge), or null if there is no way out in view. beyond = what you can see "
-        "through it, or null.\n"
-        'Reply with ONLY this JSON: {"exit_x": null, "is_doorway": false, "beyond": null, "what": "max 4 words"}')
+        "through it, or null. exit_floor_y = where the bottom of the opening meets the floor "
+        "(0 = top of image, 1000 = bottom), or null.\n"
+        'Reply with ONLY this JSON: {"exit_x": null, "exit_floor_y": null, "is_doorway": false, "beyond": null, '
+        '"what": "max 4 words"}')
     try:
         text, _ = models.ask(config.EYES_MODEL, prompt, img, max_tokens=80, image_side=config.SPOT_SIDE or None)
         r = models.parse_json(text) or {}
@@ -124,12 +126,17 @@ def match_exit(img, ref) -> dict:
     prompt = (
         "LEFT strip: a doorway the robot saw earlier. RIGHT: the robot's camera now. "
         "Is that same doorway visible in the RIGHT image? exit_x = its horizontal centre within the RIGHT "
-        "image only (0 = left edge of the right image, 1000 = right edge), or null if not visible.\n"
-        'Reply with ONLY this JSON: {"exit_x": null, "what": "max 4 words"}')
+        "image only (0 = left edge of the right image, 1000 = right edge), or null if not visible. Only say "
+        "yes if it is the SAME open door: an arch, alcove or wall recess is not a doorway. exit_floor_y = where "
+        "its bottom meets the floor in the RIGHT image (0 = top, 1000 = bottom). beyond = what you can see "
+        "through it.\n"
+        'Reply with ONLY this JSON: {"exit_x": null, "exit_floor_y": null, "beyond": null, "what": "max 4 words"}')
     try:
         text, _ = models.ask(config.EYES_MODEL, prompt, pair, max_tokens=80, image_side=config.SPOT_SIDE or None)
         r = models.parse_json(text) or {}
-        print(f"   [remembered way out] {r.get('what')} x={r.get('exit_x')}")
+        if r.get("exit_x") is not None and not is_way_out(r):
+            r["exit_x"] = None  # can't see through it: not the open door
+        print(f"   [remembered way out] {r.get('what')} x={r.get('exit_x')} beyond={r.get('beyond')}")
         return r
     except Exception as e:
         print(f"   remembered-exit check failed: {e}")
@@ -384,6 +391,7 @@ def _search(goal: str, source: str | None, target: str | None = None):
     search_side, search_turns = None, 0  # where the camera last saw the target
     scan_turns, explore_steps = 0, 0  # scans with nothing found; steps heading for a doorway/open path
     exit_ref = None  # photo of the best doorway/way out seen so far (visual memory)
+    door_lost, passing_door, last_door_cm = 0, 0, None
     print(f"Goal: {goal}\nTarget: {target}\nLogging to {run_dir}\n{'DRY RUN' if car.dry_run else 'LIVE CAR'}\n")
 
     if keys.start():
@@ -499,24 +507,47 @@ def _search(goal: str, source: str | None, target: str | None = None):
         if d.get("person_visible"):
             search_side, search_turns, scan_turns, explore_steps = None, 0, 0, 0
         elif explore_steps > 0 or scan_turns >= config.SCANS_BEFORE_EXPLORE:
-            # Looked all round this spot and found nothing: head for a doorway or the most open path.
+            # Nothing here: drive to the open door the same way we drive to the target (steer to it,
+            # measure the distance to its threshold), and keep going until we're through it.
             if explore_steps == 0:
-                explore_steps, scan_turns = config.EXPLORE_STEPS, 0
+                explore_steps, scan_turns, door_lost = config.EXPLORE_STEPS, 0, 0
+            explore_steps -= 1
             ex = match_exit(img, exit_ref) if exit_ref is not None else {}
             if ranging.to_fraction(ex.get("exit_x")) is None:
                 ex = find_exit(img, goal)
             x = ranging.to_fraction(ex.get("exit_x"))
-            if x is not None:
-                explore_steps -= 1  # only count steps actually heading somewhere
+            row = ranging.to_fraction(ex.get("exit_floor_y"))
+            door_cm = ranging.distance_cm(row, _cal) if (row is not None and _cal) else None
+            what = ex.get("what") or "the open door"
             if x is None:
-                turn = door_hint if door_hint in ("left", "right") else "left"
-                d["action"], d["amount"], d["override"] = turn, 1.0, f"turning {turn} towards the remembered way out"
-                d["spin"] = config.SPIN_SEARCH
-            elif abs(x - 0.5) > config.AIM_DEADBAND:
-                d["action"] = "left" if x < 0.5 else "right"
-                d["amount"], d["override"] = 0.6, f"heading for {ex.get('what') or 'the open path'} (x={x:.2f})"
+                door_lost += 1
+                if last_door_cm is not None and last_door_cm < config.DOOR_THROUGH_CM + 40 and door_lost == 1:
+                    passing_door = 2  # it was close and now it's out of view: we're at it, keep going through
+                if passing_door > 0:
+                    d["action"], d["amount"], d["override"] = "forward", 1.0, "through the doorway"
+                    passing_door -= 1
+                else:
+                    turn = door_hint if door_hint in ("left", "right") else "left"
+                    d["action"], d["amount"], d["override"] = turn, 1.0, f"turning {turn} to find the way out"
+                    d["spin"] = config.SPIN_SEARCH
+                if door_lost >= 3:
+                    explore_steps = 0  # lost it: scan again from here
             else:
-                d["action"], d["amount"], d["override"] = "forward", 1.0, f"through {ex.get('what') or 'the open path'}"
+                door_lost = 0
+                last_door_cm = door_cm
+                if door_cm is not None and door_cm < config.DOOR_THROUGH_CM:
+                    passing_door = 2  # at the threshold: drive straight through
+                    explore_steps = max(explore_steps, 2)
+                    d["action"], d["amount"], d["override"] = "forward", 1.0, f"at {what} ({door_cm:.0f} cm): going through"
+                elif abs(x - 0.5) > config.AIM_DEADBAND:
+                    d["action"] = "left" if x < 0.5 else "right"
+                    d["amount"] = min(1.0, 0.3 + 1.2 * abs(x - 0.5))
+                    d["override"] = f"steer to {what} (x={x:.2f}{', ' + format(door_cm, '.0f') + ' cm' if door_cm else ''})"
+                else:
+                    d["action"], d["amount"] = "forward", 1.0
+                    d["override"] = f"towards {what}{' (' + format(door_cm, '.0f') + ' cm)' if door_cm else ''}"
+            if explore_steps == 0 and passing_door == 0:
+                memory.append(f"step {step}: finished heading for the way out")
         elif search_side and search_turns < config.MAX_SEARCH_TURNS:
             search_turns += 1
             d["action"], d["amount"], d["override"] = (

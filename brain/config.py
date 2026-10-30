@@ -74,7 +74,8 @@ CAM_SCAN = _env("CAM_SCAN", "1") == "1"  # target lost: look left/right with the
 PAN_SECONDS = float(_env("PAN_SECONDS", "0.5"))  # how long to hold the camera pan for one look
 MAX_SEARCH_TURNS = int(_env("MAX_SEARCH_TURNS", "8"))  # full-lock turns towards a camera sighting before looking again
 SCANS_BEFORE_EXPLORE = int(_env("SCANS_BEFORE_EXPLORE", "5"))  # full scans with nothing found before heading for a doorway
-EXPLORE_STEPS = int(_env("EXPLORE_STEPS", "4"))  # steps spent driving to the doorway/open path before scanning again
+EXPLORE_STEPS = int(_env("EXPLORE_STEPS", "12"))  # steps spent driving to the doorway/open path before scanning again
+DOOR_THROUGH_CM = float(_env("DOOR_THROUGH_CM", "45"))  # this close to the door threshold: drive straight through
 SURVEY = _env("SURVEY", "1") == "1"  # look all round from the start, note doors, confirm the U-turn by matching views
 MAX_UTURN_SPINS = int(_env("MAX_UTURN_SPINS", "3"))  # spins allowed to complete the U-turn during the survey
 SPIN_SEARCH = _env("SPIN_SEARCH", "1") == "1"  # search turns are three-point turns (turn on the spot)
