@@ -14,6 +14,7 @@ Steering only (no throttle):           python brain/ble_link.py --steer
 On the floor, measure one turn:        python brain/ble_link.py --turn
 On the floor, measure one forward move: python brain/ble_link.py --forward
 Camera pan check:                      python brain/ble_link.py --pan
+Three-point turn (search):             python brain/ble_link.py --spin
 List Bluetooth devices:                python brain/ble_link.py --scan
 Close the Jupyter controller first: the car accepts one Bluetooth connection at a time.
 """
@@ -163,6 +164,22 @@ class BleCarLink:
             time.sleep(0.02)
         self.stop()
 
+    def spin(self, direction: str) -> None:
+        """Three-point turn: forward with full lock one way, then reverse with full lock the other way.
+        Both halves rotate the car the same way, so it turns about twice as far with almost no travel."""
+        fwd = -1.0 if direction == "left" else 1.0
+        self.last_amount = 1.0
+        self.drive(fwd, 1.0, config.TURN_SECONDS)
+        if not self.dry_run:
+            self._queue(STEER_CENTER)   # jump the steering back to centre before locking the other way
+            time.sleep(0.35)
+        if keys.stop_requested():
+            return
+        self.drive(-fwd, -1.0, config.TURN_SECONDS)
+        if not self.dry_run:
+            self._queue(STEER_CENTER)
+        time.sleep(0.3)
+
     def _gear_change(self, direction: int) -> None:
         """Forward <-> reverse: tap the new direction, release, wait out the firmware's neutral period."""
         self._set(direction)
@@ -272,6 +289,12 @@ if __name__ == "__main__":
                 print("camera centre")
                 car.center_camera()
                 time.sleep(1.0)
+        elif "--spin" in sys.argv:
+            # On the floor: one three-point turn each way (what the search uses).
+            for side in ["left", "right"]:
+                print(f"spin {side}")
+                car.spin(side)
+                time.sleep(1.5)
         elif "--forward" in sys.argv:
             # On the floor: one full-size forward move, to measure how far it goes.
             print(f"forward (FORWARD_SECONDS={config.FORWARD_SECONDS})")

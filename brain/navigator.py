@@ -250,6 +250,7 @@ def _search(goal: str, source: str | None, target: str | None = None):
             search_turns += 1
             d["action"], d["amount"], d["override"] = (
                 search_side, 1.0, f"turning {search_side} to where the camera saw the target ({search_turns})")
+            d["spin"] = config.SPIN_SEARCH
         elif d["action"] in ("left", "right", "forward", "back") and not keys.stop_requested():
             search_side, search_turns = None, 0
             seen = None
@@ -258,8 +259,10 @@ def _search(goal: str, source: str | None, target: str | None = None):
             if seen:
                 search_side, search_turns = seen, 1
                 d["action"], d["amount"], d["override"] = seen, 1.0, f"camera spotted target on the {seen}"
+                d["spin"] = config.SPIN_SEARCH
             elif d["action"] in ("left", "right"):
                 d["amount"], d["override"] = 1.0, "camera look: nothing, full turn to scan"
+                d["spin"] = config.SPIN_SEARCH
 
         # Steer to the target: the model says WHERE it is across the image (person_x, 0-1000),
         # our code picks the turn. Keeps the target in the middle of the view as the car closes in.
@@ -349,8 +352,12 @@ def _search(goal: str, source: str | None, target: str | None = None):
                 repeat = 1
         before = img
         for r in range(repeat):
-            car.do(d["action"], amount)
-            pose.update(d["action"], getattr(car, "last_amount", amount))
+            if d.get("spin") and d["action"] in ("left", "right") and hasattr(car, "spin"):
+                car.spin(d["action"])  # three-point turn: rotates about twice as far, almost on the spot
+                pose.update(d["action"], 2.0)
+            else:
+                car.do(d["action"], amount)
+                pose.update(d["action"], getattr(car, "last_amount", amount))
             if r < repeat - 1:
                 after = frames.get()
                 if after is None or frame_diff(before, after) < config.STUCK_DIFF:
