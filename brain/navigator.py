@@ -95,8 +95,9 @@ def find_exit(img, goal: str) -> dict:
     try:
         text, _ = models.ask(config.EYES_MODEL, prompt, img, max_tokens=80, image_side=config.SPOT_SIDE or None)
         r = models.parse_json(text) or {}
-        if r.get("is_doorway") and not is_way_out(r):
-            r["is_doorway"] = False  # a door it can't see through: probably closed
+        if (r.get("is_doorway") or "door" in str(r.get("what") or "").lower()) and not is_way_out(r):
+            r["is_doorway"] = False  # a door it can't see through: probably closed, don't drive at it
+            r["exit_x"] = None
         print(f"   [way out] {r.get('what')} x={r.get('exit_x')} beyond={r.get('beyond')}")
         return r
     except Exception as e:
